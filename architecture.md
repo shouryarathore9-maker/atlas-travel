@@ -233,6 +233,28 @@ No live inventory, so realistic seed data matters:
 ## 10. Non-Functional Notes
 Mirrors `prd.md`: responsive breakpoints at ~375px / ~768px / ~1440px, Lighthouse ≥ 90 targets, graceful empty/error states for no-results and failed mock payments.
 
+## Implementation Deviations (recorded per AGENTS.md)
+Changes made while building the MVP. Each is additive or a clarification; nothing in the original model was removed.
+
+1. **Hotel `roomTypes[].cancellationPolicy`** uses `{ freeUntilDaysBeforeCheckIn, feeAfterCutoff }` instead of `{ freeUntilDate, feeAfterCutoff }`. A fixed date can't apply to every stay date; the concrete cutoff date is computed per booking (see #2).
+2. **Booking** gained:
+   - `policySnapshot: { freeUntil, feeAfterCutoff }` — the cancellation terms frozen at booking time, used for the simulated refund (Decisions & Defaults #6), so later admin edits never change what the traveller agreed to.
+   - `itemSummary: { title, subtitle, image, origin, destination }` — denormalised display info so My Bookings needs no joins and survives inventory edits.
+   - `contact: { email, phone }` — required by user story #8.
+   - `selection.rooms` (hotel) and per-traveller `seat` / `meal` in `travellers[]` (multi-traveller flight bookings).
+   - `idempotencyKey` (unique per user) — guarantees a retried/refreshed payment never creates a duplicate booking (story #10).
+3. **Review** gained `authorName` so seeded reviews (which have no `userId`) can show a reviewer name.
+4. **Payment** gained `userId`; `bookingId` is `null` for failed attempts (no booking is created on failure).
+5. **API**
+   - Bookings are created only by `POST /api/payments/mock` on success (as §6 describes); there is no separate `POST /api/bookings`.
+   - Added `GET /api/bookings/:key` (by booking reference or id, owner only) for the confirmation/detail page, and `GET /api/hotels/cities`.
+   - `GET /api/auth/me` returns `200 { user: null }` when signed out (instead of 401) so the SPA's session check never logs a console error. Protected routes still return 401/403.
+   - Admin also has `GET /api/admin/flights[/:id]` and `GET /api/admin/hotels[/:id]` (list with search + pagination, and single item for the edit form).
+6. **Inventory is not per-date for hotels**: `roomsAvailable` is a single counter per room type (decremented on booking, restored on cancel). Flight seats are per flight document, since each seeded flight is one dated departure.
+7. **Folder structure** adds `server/services` (pricing, inventory, refunds), `server/utils`, `server/config`, `server/tests`, and `client/src/lib` (formatting, pricing mirror, validation).
+8. **Password hashing** uses `bcryptjs` (pure-JS bcrypt, same algorithm and hash format) to avoid native build tooling on Windows.
+9. **Seed flights** are dated departures for the next `SEED_DAYS` (default 21) days from when the seed runs; re-run `npm run seed` to roll the window forward.
+
 ## Decisions & Defaults (previously open questions — resolved so the agent can build without stopping)
 1. **Frontend/backend split (Vercel + Render/Railway):** final for MVP, as described in section 2.
 2. **Auth storage:** JWT in an httpOnly cookie (not `localStorage`) — better XSS resistance, standard practice, acceptable added complexity for a learning project.

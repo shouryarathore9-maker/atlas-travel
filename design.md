@@ -115,6 +115,14 @@ Passenger/guest details form → fare/room summary → mock payment (UPI/QR tab 
 **Confirmation**
 Large success state, booking reference, trip summary, "View my bookings" and "Back to home" actions.
 
+## Implementation Notes (recorded per AGENTS.md)
+1. **Accessible terracotta shades.** `#B86B4B` with ivory text is ~4.0:1, below the 4.5:1 this doc requires. The code keeps `--color-primary: #B86B4B` for accents, focus rings and large text, and adds:
+   - `--color-primary-strong: #A85D3E` — primary button fill (ivory text ≈ 4.9:1)
+   - `--color-primary-hover: #974F33` — button hover (~8% deeper, per States)
+   - `--color-primary-ink: #8F4B2C` — terracotta text/links on ivory or white (≥ 5:1)
+2. **Homepage (concept mockup applied).** Solid ivory nav with the logo and "Destinations" / "Stays" links on the left (Destinations scrolls to the featured grid; Stays opens the Hotels tab). The mockup's "Experiences" and "About" were left out because they have no PRD feature. Full-bleed coastal hero with an ivory wash behind left-aligned text, a separate cropped photo for phones, the search card over the photo's lower edge, a 4-up destinations grid ("View all" reveals all 8 seeded cities), and an image + italic quote strip. The mockup's "Typography" / "UI Elements" panels are a style guide, not page content.
+3. **Fonts.** Canela is commercial, so the app loads DM Serif Display (the documented fallback) and Inter from Google Fonts.
+
 ## Decisions & Defaults (previously open questions — resolved so the agent can build without stopping)
 1. **Tab placement:** Flights/Hotels switcher lives inside the hero search card (not a separate top-level nav tab) — matches the concept mockup most closely and mirrors MMT/Booking.com.
 2. **Photo sourcing:** curated, downloaded, HD royalty-free stock photos committed to the repo (see `architecture.md` §Decisions & Defaults) — not hot-linked, not AI-generated.
