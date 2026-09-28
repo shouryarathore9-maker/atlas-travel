@@ -4,13 +4,15 @@ import Footer from './components/Footer.jsx';
 import Nav from './components/Nav.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import { Spinner } from './components/States.jsx';
+import FlightDetail from './pages/FlightDetail.jsx';
+import FlightResults from './pages/FlightResults.jsx';
 import Home from './pages/Home.jsx';
+import HotelDetail from './pages/HotelDetail.jsx';
+import HotelResults from './pages/HotelResults.jsx';
 import NotFound from './pages/NotFound.jsx';
 
-const FlightResults = lazy(() => import('./pages/FlightResults.jsx'));
-const HotelResults = lazy(() => import('./pages/HotelResults.jsx'));
-const FlightDetail = lazy(() => import('./pages/FlightDetail.jsx'));
-const HotelDetail = lazy(() => import('./pages/HotelDetail.jsx'));
+// Browse pages (above) are small and on the critical path, so they ship in the main bundle.
+// Signed-in and admin pages load on demand.
 const Checkout = lazy(() => import('./pages/Checkout.jsx'));
 const Confirmation = lazy(() => import('./pages/Confirmation.jsx'));
 const MyBookings = lazy(() => import('./pages/MyBookings.jsx'));
@@ -32,9 +34,12 @@ function Shell() {
   return (
     <>
       <Nav />
-      <Suspense fallback={<Spinner />}>
-        <Outlet />
-      </Suspense>
+      {/* Full-height wrapper keeps the footer below the fold while pages load (prevents layout shift). */}
+      <div className="shell-main">
+        <Suspense fallback={<Spinner />}>
+          <Outlet />
+        </Suspense>
+      </div>
       <Footer />
     </>
   );

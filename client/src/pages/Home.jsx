@@ -89,7 +89,6 @@ export default function Home() {
                   <Link
                     to={`/hotels?${new URLSearchParams({ city: city.city, checkIn, checkOut: addDays(checkIn, 2), adults: 2, children: 0, rooms: 1 })}`}
                     className="destination-card"
-                    aria-label={`Stays in ${city.city}`}
                   >
                     <SmartImage
                       src={city.image}

@@ -253,7 +253,8 @@ Changes made while building the MVP. Each is additive or a clarification; nothin
 6. **Inventory is not per-date for hotels**: `roomsAvailable` is a single counter per room type (decremented on booking, restored on cancel). Flight seats are per flight document, since each seeded flight is one dated departure.
 7. **Folder structure** adds `server/services` (pricing, inventory, refunds), `server/utils`, `server/config`, `server/tests`, and `client/src/lib` (formatting, pricing mirror, validation).
 8. **Password hashing** uses `bcryptjs` (pure-JS bcrypt, same algorithm and hash format) to avoid native build tooling on Windows.
-9. **Seed flights** are dated departures for the next `SEED_DAYS` (default 21) days from when the seed runs; re-run `npm run seed` to roll the window forward.
+9. **Rate limiting** — `POST /api/auth/register` and `/login` share a strict limit (30 requests / 15 min / IP). `GET /api/auth/me` and `/logout` use a separate, lenient limit (600 / 15 min), because the session check runs on every page load and must not lock users out.
+10. **Seed flights** are dated departures for the next `SEED_DAYS` (default 21) days from when the seed runs; re-run `npm run seed` to roll the window forward.
 
 ## Decisions & Defaults (previously open questions — resolved so the agent can build without stopping)
 1. **Frontend/backend split (Vercel + Render/Railway):** final for MVP, as described in section 2.

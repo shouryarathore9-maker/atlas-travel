@@ -16,7 +16,7 @@ export default function HotelCard({ hotel, stayQuery }) {
       <div className="hotel-card-body">
         <div>
           <Stars count={hotel.starRating} />
-          <h3 className="result-title">{hotel.name}</h3>
+          <h2 className="result-title">{hotel.name}</h2>
           <p className="small muted">{hotel.address}</p>
         </div>
         <RatingBadge rating={hotel.rating} />

@@ -10,7 +10,7 @@ export default function FlightCard({ flight, travellers, cabin }) {
   return (
     <article className="result-card flight-card fade-in">
       <div className="flight-card-airline">
-        <h3 className="result-title">{flight.airline}</h3>
+        <h2 className="result-title">{flight.airline}</h2>
         <p className="small muted">
           {flight.flightNumber} · {flight.aircraftType}
         </p>

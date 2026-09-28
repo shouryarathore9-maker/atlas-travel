@@ -105,6 +105,10 @@ textarea {
   padding: 0 var(--gutter);
 }
 
+.shell-main {
+  min-height: calc(100vh - 68px);
+}
+
 .page {
   padding-top: var(--space-6);
   padding-bottom: var(--space-8);

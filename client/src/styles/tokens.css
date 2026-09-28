@@ -5,8 +5,8 @@
   --color-primary: #b86b4b; /* Terracotta — accents, focus rings, large text */
   /* Accessibility refinement: slightly deeper terracotta so ivory text on buttons and
      terracotta link text both clear WCAG 4.5:1. See design.md "Accessibility notes". */
-  --color-primary-strong: #a85d3e;
-  --color-primary-hover: #974f33;
+  --color-primary-strong: #9c5436;
+  --color-primary-hover: #874629;
   --color-primary-ink: #8f4b2c;
   --color-secondary: #6e7560; /* Muted Olive */
   --color-sand: #d8c8ae;
