@@ -38,6 +38,20 @@ export async function requireAuth(req, res, next) {
   next();
 }
 
+// Like requireAuth, but an anonymous or expired session just leaves req.user unset.
+export async function optionalAuth(req, res, next) {
+  const token = req.cookies?.[AUTH_COOKIE];
+  if (token) {
+    try {
+      const payload = jwt.verify(token, process.env.JWT_SECRET);
+      req.user = await User.findById(payload.sub);
+    } catch {
+      req.user = null;
+    }
+  }
+  next();
+}
+
 export function adminOnly(req, res, next) {
   if (req.user?.role !== 'admin') throw new HttpError(403, 'This area is for administrators only.', 'FORBIDDEN');
   next();

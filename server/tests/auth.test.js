@@ -31,15 +31,18 @@ describe('auth', () => {
     expect(noUser.body.error.message).toBe(wrongPass.body.error.message);
   });
 
-  it('returns the current user for a session and 401 after logout', async () => {
+  it('returns the current user for a session and no user after logout', async () => {
     const agent = await loggedInAgent();
-    await agent.get('/api/auth/me').expect(200);
+    expect((await agent.get('/api/auth/me').expect(200)).body.user.role).toBe('traveler');
     await agent.post('/api/auth/logout').expect(200);
-    await agent.get('/api/auth/me').expect(401);
+    expect((await agent.get('/api/auth/me').expect(200)).body.user).toBeNull();
+    // Protected routes still reject the logged-out session
+    await agent.get('/api/bookings/me').expect(401);
   });
 
-  it('rejects /me without a cookie', async () => {
-    const res = await request(app).get('/api/auth/me').expect(401);
-    expect(res.body.error.code).toBe('UNAUTHENTICATED');
+  it('reports no user for /me without a cookie or with a forged one', async () => {
+    expect((await request(app).get('/api/auth/me').expect(200)).body.user).toBeNull();
+    const forged = await request(app).get('/api/auth/me').set('Cookie', 'atlas_token=not-a-jwt').expect(200);
+    expect(forged.body.user).toBeNull();
   });
 });

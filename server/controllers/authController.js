@@ -58,6 +58,7 @@ export function logout(req, res) {
   res.json({ ok: true });
 }
 
+// 200 with user: null when signed out, so the SPA's session check never logs a console error.
 export function me(req, res) {
-  res.json({ user: req.user.toPublic() });
+  res.json({ user: req.user ? req.user.toPublic() : null });
 }
