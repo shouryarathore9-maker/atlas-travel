@@ -1,0 +1,47 @@
+/* Design tokens from design.md */
+:root {
+  --color-bg: #f6f1e8; /* Warm Ivory */
+  --color-text: #17221f; /* Deep Ink */
+  --color-primary: #b86b4b; /* Terracotta — accents, focus rings, large text */
+  /* Accessibility refinement: slightly deeper terracotta so ivory text on buttons and
+     terracotta link text both clear WCAG 4.5:1. See design.md "Accessibility notes". */
+  --color-primary-strong: #a85d3e;
+  --color-primary-hover: #974f33;
+  --color-primary-ink: #8f4b2c;
+  --color-secondary: #6e7560; /* Muted Olive */
+  --color-sand: #d8c8ae;
+  --color-sand-soft: #ece3d3;
+  --color-surface: #ffffff;
+  --color-error: #b84b4b;
+  --color-error-ink: #9c3a3a;
+  --color-success: #4b7a5a;
+  --color-muted: #525d58;
+
+  --font-heading: 'Canela', 'DM Serif Display', Georgia, serif;
+  --font-body: 'Inter', 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  --shadow-float: 0 4px 16px rgba(23, 34, 31, 0.08);
+  --ease: 180ms ease;
+  --max-width: 1280px;
+  --gutter: 16px;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --gutter: 24px;
+  }
+}
