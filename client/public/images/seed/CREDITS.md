@@ -3,9 +3,8 @@
 Images are committed to the repo (not hot-linked) per `architecture.md` → Decisions & Defaults #5.
 
 ## Hero & quote imagery
-`hero-mobile.webp`, `hero-laptop.webp` and `quote-terrace.webp` are cropped from the
-project's homepage concept mockups supplied by the project owner. `hero-laptop.webp` is upscaled from a
-736px source, so it is slightly soft on very wide screens — replace with a higher-resolution original when available.
+`hero-laptop.webp` (1983×793, used from 768px up) is the full-resolution panorama supplied by the project owner.
+`hero-mobile.webp` and `quote-terrace.webp` are cropped from the owner's homepage concept mockups.
 
 ## Unsplash photos
 Free to use under the [Unsplash License](https://unsplash.com/license). Downloaded September 2026.
