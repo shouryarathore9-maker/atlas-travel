@@ -73,7 +73,7 @@ Since most OTA traffic is mobile, design and test the phone layout first for eve
 
 ## Iconography & Imagery
 - Icons: simple line icons (search, calendar, guest, location, filter) — consistent stroke width, no filled/glyph icons except small status dots.
-- Imagery: full-bleed, high-resolution (HD) photography for the hero and destination highlights — same coastal/Mediterranean-style image family as the concept mockup. Images are downloaded from a royalty-free stock library (e.g. Unsplash) and committed into the repo rather than hot-linked (decided default — see Decisions & Defaults), so they stay HD and available without an external dependency.
+- Imagery: full-bleed, high-resolution (HD) photography for the hero and destination highlights — same coastal/Mediterranean-style image family as the concept mockup. Images are downloaded from a royalty-free stock library (e.g. Unsplash) and committed into the repo rather than hot-linked (decided default — see Decisions & Defaults), so they stay HD and available without an external dependency, and are served from the Vercel CDN alongside the rest of the site.
 - Hotel/flight result thumbnails: consistent aspect ratio (e.g. 4:3), real-feeling stock photography rather than generic icons.
 
 ## Motion & Transitions

@@ -129,6 +129,9 @@ Price alerts, user-submitted reviews (vs. seeded-only), richer admin analytics/d
 
 ## Assumptions, Constraints, Risks
 - **Constraint:** No third-party APIs — all flight/hotel/payment data is mocked and seeded.
+- **Constraint:** Hosting is Vercel's free Hobby plan (frontend and API on one domain) with MongoDB Atlas's free tier as the database. The Hobby plan is for personal, non-commercial use, which fits this learning project; its usage limits are far above what a portfolio demo needs.
+- **Assumption:** The demo always has flights to book: seeded flights cover the coming three weeks, and a daily scheduled job keeps that window full (see `architecture.md` §7).
+- **Risk:** The first request after a quiet period can take a second or two longer while the server starts up.
 - **Risk:** Scoping both flights *and* hotels (rather than one vertical) roughly doubles the surface area of the MVP; timeline should account for this.
 - **Risk:** Seat-map and meal-selection UI is one of the more complex pieces of the flight flow and may take longer than a typical CRUD screen.
 

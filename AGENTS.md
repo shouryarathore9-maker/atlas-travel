@@ -8,7 +8,13 @@
 Atlas is a MERN-stack travel booking web app (flights + hotels), built as a personal learning project and eventually deployed publicly. It is inspired by MakeMyTrip/Yatra/Ixigo/Agoda/Booking.com but deliberately avoids their upsell-heavy, cluttered UX. There are no third-party APIs: all flight/hotel inventory and all payments are mocked and seeded. A senior engineer reviews generated code and docs for correctness only — they will not answer open-ended product questions, so anything genuinely ambiguous should be flagged as an assumption or open question rather than silently guessed at mid-code. Note that `prd.md`, `architecture.md`, and `design.md` have already had their open questions resolved into defaults — treat those as decided unless told otherwise.
 
 ## Stack Summary
-MongoDB, Express, React (Vite), Node.js. Frontend deploys to Vercel; backend + MongoDB Atlas deploy to Render/Railway. Full details: `architecture.md`. Product scope and priorities: `prd.md`. Visual/UX rules: `design.md`.
+MongoDB, Express, React (Vite), Node.js. The whole app — static frontend and Express API — deploys as one Vercel project on one domain; the database is MongoDB Atlas. Full details: `architecture.md`.
+
+**Vercel runs the API as serverless functions**, so backend code must:
+- export the Express app rather than depend on a long-running process;
+- reuse the cached Mongoose connection (never open a new connection per request);
+- keep anything that must persist (sessions, counters, inventory, idempotency) in MongoDB, never in memory;
+- do scheduled work only through the Vercel Cron endpoint described in `architecture.md` §7. Product scope and priorities: `prd.md`. Visual/UX rules: `design.md`.
 
 ## General Rules
 - Treat `prd.md` → `architecture.md`/`design.md` → this file as the priority order when something seems to conflict. If a code request contradicts one of them, flag it rather than silently overriding the doc.
@@ -29,7 +35,7 @@ MongoDB, Express, React (Vite), Node.js. Frontend deploys to Vercel; backend + M
 - Validate and sanitize all incoming request data (e.g. with `zod` or `express-validator`) before it touches the database.
 - Protect all `/api/admin/*` routes with both auth and role-based (`role === 'admin'`) middleware.
 - Rate-limit authentication endpoints (`/api/auth/*`).
-- Store all secrets (`JWT_SECRET`, `MONGODB_URI`, etc.) in environment variables, loaded via `.env` locally and via the hosting platform's secret manager in production. `.env` must be in `.gitignore` from the first commit.
+- Store all secrets (`JWT_SECRET`, `MONGODB_URI`, etc.) in environment variables, loaded via `.env` locally and via Vercel project environment variables in production. `.env` must be in `.gitignore` from the first commit.
 - No real payment data of any kind is ever collected, stored, or transmitted — treat all payment fields as pure UI simulation, not real sanitized payment input.
 
 ## Coding Conventions
@@ -39,12 +45,14 @@ MongoDB, Express, React (Vite), Node.js. Frontend deploys to Vercel; backend + M
 - Keep components small and focused; extract shared UI (cards, buttons, form fields) into `/components` rather than duplicating markup.
 
 ## Commands
-- `npm install` — install dependencies (run in both `/client` and `/server`)
+- `npm run install:all` — install dependencies for the root, `/client` and `/server`
 - `npm run dev` — start dev server (client via Vite, server via `nodemon`)
 - `npm run build` — production build (client)
 - `npm run lint` — run ESLint across the project
 - `npm test` — run the test suite (Vitest — see Testing Expectations)
-- `npm run seed` — populate MongoDB with mock flights, hotels, and reviews (idempotent, safe to re-run)
+- `npm run seed` — populate MongoDB with mock flights, hotels, and reviews (idempotent, safe to re-run; resets bookings — run from a developer machine, never during a deploy)
+- `npm run extend-flights` — run the daily flight-window job locally (the same work Vercel Cron does in production)
+- Deploys happen automatically when `main` is pushed to GitHub (Vercel Git integration).
 
 *(Exact script names should match whatever is defined in each `package.json`; keep this list in sync as scripts are added.)*
 
@@ -78,9 +86,9 @@ chore: bump dependencies
 - Branch naming: `feat/`, `fix/`, `chore/` prefixes matching the commit type.
 
 ## Environment Variables & Secrets
-- Local development: `.env` files in `/client` (Vite requires the `VITE_` prefix, e.g. `VITE_API_BASE_URL`) and `/server` (`MONGODB_URI`, `JWT_SECRET`, `PORT`, etc.).
+- Local development: one `.env` file in `/server` (`MONGODB_URI`, `JWT_SECRET`, `CRON_SECRET`, `PORT`). The client needs no environment variables — it calls the API on its own origin (`/api`, proxied by Vite in development).
 - Never commit `.env`; a `.env.example` with placeholder values should be committed instead so the shape of required variables is documented.
-- Production secrets are set directly in the Vercel and Render/Railway dashboards, not in code or committed files.
+- Production secrets (`MONGODB_URI`, `JWT_SECRET`, `CRON_SECRET`) are set as Vercel project environment variables, not in code or committed files.
 
 ## Workflow Rules
 - Plan before coding.

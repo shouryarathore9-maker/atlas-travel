@@ -7,28 +7,33 @@
 - **Backend:** Node.js + Express (REST API)
 - **Database:** MongoDB (Mongoose ODM)
 - **Auth:** JWT, stored in an httpOnly cookie (decided default — see Decisions & Defaults)
+- **Hosting:** Vercel (Hobby plan) for both the frontend and the API; MongoDB Atlas (free tier) for the database
 - **No third-party APIs** for flights, hotels, or payments — everything is mocked/seeded.
 
 ## 2. Deployment Topology
-The frontend and backend deploy separately, since Vercel is well suited to the React static build but not to a persistent Express + MongoDB server:
+The whole app is **one Vercel project**, deployed from the repository root, so the frontend and the API share a single domain:
 
-| Piece | Platform | Why |
+| Piece | Runs as | Notes |
 |---|---|---|
-| React frontend (static build) | **Vercel** | Fast static hosting, ideal for a Vite/React build |
-| Express API + MongoDB connection | **Render or Railway** | Supports long-running Node servers, environment variables, free tier suitable for a learning project |
-| Database | **MongoDB Atlas** (free tier) | Managed Mongo, works from either backend host |
+| React frontend (Vite build of `/client`) | Static files on the Vercel CDN | Any path that isn't a file or `/api/*` falls back to `index.html` (client-side routing) |
+| Express API (`/server`, entry `/api/index.js`) | One Vercel Function on Fluid compute | Every `/api/*` request is routed to it |
+| Scheduled job | Vercel Cron (daily) | Calls `/api/cron/extend-flights` — see §7 |
+| Database | **MongoDB Atlas** (free tier) | Reached over TLS with the `MONGODB_URI` connection string |
 
-Frontend calls the backend via its public API URL (`VITE_API_BASE_URL` env var). CORS on the backend is restricted to the deployed frontend origin (plus `localhost` in dev). This is the final decision for MVP (see Decisions & Defaults).
+Because the SPA and the API are **same-origin**, the browser sends the auth cookie with `SameSite=Lax` and no CORS configuration is needed; cross-origin calls to the API are simply not allowed. Routing, the cron schedule and the function region live in `vercel.json`; secrets are Vercel project environment variables.
+
+**Serverless rules the backend follows**
+- **No long-lived process:** the Express app is exported (not `app.listen`) for Vercel; `server/index.js` only exists to run it locally.
+- **Database connection:** one Mongoose connection is created per function instance, cached in module scope and reused by every request that instance serves. Each request awaits it before touching the database, and the underlying pool is registered with `attachDatabasePool` so idle connections close before an instance is suspended.
+- **No important state in memory:** sessions are JWT cookies; bookings, payments, idempotency keys, inventory and rate-limit counters all live in MongoDB, so any instance can serve any request.
+- **Region:** the function runs in the Vercel region closest to the Atlas cluster (set in `vercel.json`), keeping each database round trip short.
 
 ## 3. High-Level Flow
 ```
-React SPA (Vercel)
-      │  REST calls (fetch/axios)
-      ▼
-Express API (Render/Railway)
-      │  Mongoose
-      ▼
-MongoDB Atlas
+Browser ── same domain ──┬── static files (Vercel CDN)
+                         └── /api/* ──► Express (Vercel Function) ──Mongoose──► MongoDB Atlas
+                                            ▲
+                         Vercel Cron (daily) ┘  /api/cron/extend-flights
 ```
 - Auth: client sends credentials → server verifies, issues JWT (httpOnly cookie) → subsequent requests include the cookie automatically → middleware verifies JWT and attaches `req.user`.
 - Admin routes reuse the same JWT middleware plus a `role === 'admin'` check.
@@ -187,6 +192,7 @@ One generic `Booking` collection with a `type` discriminator, rather than separa
 | GET | `/api/reviews?itemType=&itemId=` | Reviews for a flight/hotel | Public |
 | POST/PUT/DELETE | `/api/admin/flights[/:id]` | Manage flights | Admin |
 | POST/PUT/DELETE | `/api/admin/hotels[/:id]` | Manage hotels | Admin |
+| GET | `/api/cron/extend-flights` | Keep the rolling flight window full (daily Vercel Cron) | `CRON_SECRET` |
 
 ## 6. Mock Payment Flow
 Mirrors a standard Indian checkout page (per project reference screenshots):
@@ -202,18 +208,25 @@ No live inventory, so realistic seed data matters:
 - **Flights:** ~30–40 routes across those city pairs, a handful of airlines (e.g. IndiGo, Air India, Vistara, SpiceJet), each with 2–3 fare options, a 30x6 seat map, and 3–5 meal options.
 - **Hotels:** ~5–8 hotels per city (roughly 40–60 total), each with 2–3 room types, amenities, and photos.
 - **Reviews:** ~5–10 seeded reviews per flight/hotel for realistic ratings.
-- Seed script lives under `server/seed/` and is idempotent (safe to re-run against a fresh database).
+- Seed script lives under `server/seed/` and is idempotent (safe to re-run against a fresh database). It is run from a developer machine against Atlas (`npm run seed`) — never as part of a deployment, because it resets bookings.
+- **Rolling flight window:** flights are dated departures covering the next `SEED_DAYS` (21) days. A daily Vercel Cron job calls `GET /api/cron/extend-flights`, which (a) generates flights for **every** day in the window that has none — so a missed or late run is repaired by the next one — and (b) deletes flights (and their reviews) that departed more than a day ago and have no bookings. It never modifies existing flights, bookings or admin edits. The endpoint only runs when called with `Authorization: Bearer <CRON_SECRET>` (Vercel Cron sends this automatically). Locally the same job runs with `npm run extend-flights`.
 
 ## 8. Security
 - Passwords hashed with bcrypt; never stored or logged in plaintext.
 - JWT signed with a secret from environment variables; 7-day expiry, no refresh-token flow for MVP (decided default — see Decisions & Defaults).
 - Input validation on every write endpoint (e.g. via `zod` or `express-validator`).
 - Role-based middleware guarding all `/api/admin/*` routes.
-- Rate limiting on `/api/auth/*` to blunt brute-force attempts.
-- All secrets (`JWT_SECRET`, `MONGODB_URI`, etc.) in `.env`, excluded via `.gitignore`, never committed.
+- Rate limiting on `/api/auth/*` to blunt brute-force attempts. Counters are stored in MongoDB (a `ratelimits` collection whose entries expire automatically), so the limit holds across every function instance.
+- Auth cookie: `httpOnly`, `SameSite=Lax`, `Secure` in production, same-origin only.
+- The cron endpoint rejects any request without the `CRON_SECRET` bearer token.
+- All secrets (`JWT_SECRET`, `MONGODB_URI`, `CRON_SECRET`) are Vercel environment variables in production and `.env` locally (excluded via `.gitignore`, never committed).
+- MongoDB Atlas network access allows connections from any IP (Vercel functions have no fixed outbound IP); access is protected by the database user's credentials and TLS.
 
 ## 9. Suggested Folder Structure
 ```
+vercel.json        (build, routing, cron schedule, function region)
+/api
+  index.js         (Vercel Function entry — exports the Express app)
 /client
   /src
     /pages        (Home, Results, FlightDetail, HotelDetail, Checkout, Confirmation, MyBookings, Admin)
@@ -226,8 +239,9 @@ No live inventory, so realistic seed data matters:
   /models          (User, Flight, Hotel, Booking, Payment, Review, Coupon)
   /routes
   /controllers
-  /middleware      (auth, adminOnly, validation)
-  /seed
+  /middleware      (auth, adminOnly, validation, rate limiting)
+  /seed            (seed script + daily flight-window job)
+  index.js         (local development server only)
 ```
 
 ## 10. Non-Functional Notes
@@ -255,15 +269,15 @@ Changes made while building the MVP. Each is additive or a clarification; nothin
 6. **Inventory is not per-date for hotels**: `roomsAvailable` is a single counter per room type (decremented on booking, restored on cancel). Flight seats are per flight document, since each seeded flight is one dated departure.
 7. **Folder structure** adds `server/services` (pricing, inventory, refunds), `server/utils`, `server/config`, `server/tests`, and `client/src/lib` (formatting, pricing mirror, validation).
 8. **Password hashing** uses `bcryptjs` (pure-JS bcrypt, same algorithm and hash format) to avoid native build tooling on Windows.
-9. **Rate limiting** — `POST /api/auth/register` and `/login` share a strict limit (30 requests / 15 min / IP). `GET /api/auth/me` and `/logout` use a separate, lenient limit (600 / 15 min), because the session check runs on every page load and must not lock users out.
+9. **Rate limiting** — `POST /api/auth/register` and `/login` share a strict limit (30 requests / 15 min / IP). `GET /api/auth/me` and `/logout` use a separate, lenient limit (600 / 15 min), because the session check runs on every page load and must not lock users out. Counters are kept in MongoDB (see §8).
 10. **Cancellation windows of 0** — `freeUntilHoursBeforeDeparture: 0` (flights) or `freeUntilDaysBeforeCheckIn: 0` (hotels) means *no* free-cancellation window: `policySnapshot.freeUntil` is `null` and the stated fee always applies. (Found in QA-2: it was previously treated as "free until departure / check-in".)
 11. **Concurrent duplicate payments** — if two requests with the same `idempotencyKey` race, the loser briefly polls (≤ 0.5 s) for the winner's booking and returns it (200) instead of a misleading "no longer available" error. Exactly one booking is ever created.
 12. **Names** (traveller, guest, account) must be 2–80 characters of letters in any script plus spaces, apostrophes, hyphens and dots — digits and emoji are rejected with a friendly message (QA-2).
 13. **Hotel search with a past check-in** returns no results (`pastDates: true`) so the UI can explain why.
-14. **Seed flights** are dated departures for the next `SEED_DAYS` (default 21) days from when the seed runs; re-run `npm run seed` to roll the window forward.
+14. **Seed flights** are dated departures for the next `SEED_DAYS` (default 21) days; the daily cron job keeps that window full (see §7). Added `GET /api/cron/extend-flights` (cron secret only).
 
 ## Decisions & Defaults (previously open questions — resolved so the agent can build without stopping)
-1. **Frontend/backend split (Vercel + Render/Railway):** final for MVP, as described in section 2.
+1. **Hosting:** a single Vercel project serves the static frontend and the Express API (as one Vercel Function) on one domain, with MongoDB Atlas as the database — see §2. Final for MVP.
 2. **Auth storage:** JWT in an httpOnly cookie (not `localStorage`) — better XSS resistance, standard practice, acceptable added complexity for a learning project.
 3. **JWT expiry:** 7 days, single token, no refresh-token rotation for MVP.
 4. **Reviews:** seed-only, read-only through Phase 2 (matches `prd.md`).
