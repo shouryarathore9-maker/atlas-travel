@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import BestHotels from '../components/BestHotels.jsx';
 import Icon from '../components/Icon.jsx';
 import Nav from '../components/Nav.jsx';
 import SearchCard from '../components/SearchCard.jsx';
@@ -28,11 +29,14 @@ export default function Home() {
   const [showAll, setShowAll] = useState(false);
   const tab = params.get('tab') === 'hotels' ? 'hotels' : 'flights';
   const checkIn = addDays(todayIst(), 7);
+  // Default stay for homepage cards: a week out, two nights, two adults, one room.
+  const defaultStay = { checkIn, checkOut: addDays(checkIn, 2), adults: 2, children: 0, rooms: 1 };
 
-  // Nav links point at /#destinations and /#search; scroll there once the page has rendered.
+  // Nav links point at /#destinations and /#best-hotels; scroll there once the page has rendered.
   useEffect(() => {
     if (!location.hash) return;
-    document.getElementById(location.hash.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Instant jump when arriving from another page (smooth scrolling is kept for same-page clicks in Nav).
+    document.getElementById(location.hash.slice(1))?.scrollIntoView({ block: 'start' });
   }, [location.hash, location.search]);
 
   function setTab(next) {
@@ -87,7 +91,7 @@ export default function Home() {
               {cities.map((city) => (
                 <li key={city.code}>
                   <Link
-                    to={`/hotels?${new URLSearchParams({ city: city.city, checkIn, checkOut: addDays(checkIn, 2), adults: 2, children: 0, rooms: 1 })}`}
+                    to={`/hotels?${new URLSearchParams({ city: city.city, ...defaultStay })}`}
                     className="destination-card"
                   >
                     <SmartImage
@@ -104,6 +108,8 @@ export default function Home() {
               ))}
             </ul>
           </section>
+
+          <BestHotels stayQuery={new URLSearchParams(defaultStay).toString()} />
 
           <section className="quote-strip" aria-label="Our promise">
             <SmartImage src="/images/seed/quote-terrace.webp" alt="" className="quote-strip-image" />

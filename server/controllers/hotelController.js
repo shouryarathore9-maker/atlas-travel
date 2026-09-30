@@ -94,6 +94,39 @@ export async function getHotel(req, res) {
   res.json({ hotel, reviews });
 }
 
+// "Best hotels" (story #19): high star rating AND high guest rating, best-rated first.
+export const FEATURED_MIN_STARS = 4;
+export const FEATURED_MIN_RATING = 4.0;
+export const featuredQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(12).default(4),
+});
+
+export async function listFeatured(req, res) {
+  const { limit } = req.validated.query;
+  const hotels = await Hotel.find({
+    starRating: { $gte: FEATURED_MIN_STARS },
+    'rating.average': { $gte: FEATURED_MIN_RATING },
+  })
+    .sort({ 'rating.average': -1, starRating: -1, 'rating.count': -1, name: 1 })
+    .limit(limit)
+    .lean();
+
+  res.json({
+    results: hotels.map((h) => ({
+      _id: h._id,
+      name: h.name,
+      city: h.city,
+      address: h.address,
+      starRating: h.starRating,
+      amenities: h.amenities,
+      photo: h.photos?.[0] || null,
+      photos: h.photos || [],
+      rating: h.rating,
+      price: Math.min(...h.roomTypes.map((r) => r.price)), // "from" price per night, before taxes
+    })),
+  });
+}
+
 export async function listCities(req, res) {
   const cities = await Hotel.distinct('city');
   res.json({ cities: cities.sort() });

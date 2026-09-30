@@ -246,8 +246,15 @@
   color: var(--color-primary-ink);
   font-size: 0.95rem;
 }
-#destinations {
+#destinations,
+#best-hotels {
   scroll-margin-top: var(--space-4);
+}
+.best-hotels {
+  padding-top: 0;
+}
+.best-hotels .section-head p {
+  margin: var(--space-2) 0 0;
 }
 
 /* Photo + italic quote card, as in the concept mockup */

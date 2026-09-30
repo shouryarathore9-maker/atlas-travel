@@ -62,6 +62,21 @@ describe('hotel search', () => {
     expect(tooMany.body.total).toBe(0);
   });
 
+  it('lists best hotels: only 4★+ with a 4.0+ guest rating, best-rated first (story #19)', async () => {
+    await createHotel({ name: 'Top Five', starRating: 5, rating: { average: 4.6, count: 9 } });
+    await createHotel({ name: 'Good Four', starRating: 4, rating: { average: 4.2, count: 5 } });
+    await createHotel({ name: 'Low Rated Five', starRating: 5, rating: { average: 3.8, count: 7 } });
+    await createHotel({ name: 'Loved Three', starRating: 3, rating: { average: 4.8, count: 7 } });
+    const res = await request(app).get('/api/hotels/featured').expect(200);
+    expect(res.body.results.map((h) => h.name)).toEqual(['Top Five', 'Good Four']);
+    expect(res.body.results[0]).toMatchObject({ price: 6000, photo: null });
+  });
+
+  it('rejects an invalid featured limit', async () => {
+    const res = await request(app).get('/api/hotels/featured').query({ limit: 500 }).expect(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+  });
+
   it('rejects check-out before check-in', async () => {
     const res = await request(app)
       .get('/api/hotels')

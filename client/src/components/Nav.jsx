@@ -12,7 +12,13 @@ export default function Nav() {
     navigate('/');
   }
 
-  const onAuthPage = ['/login', '/signup'].includes(location.pathname);
+  // Already on the homepage? Scroll now — re-clicking the same #hash wouldn't trigger a route change.
+  function scrollToSection(id) {
+    if (location.pathname !== '/') return;
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  const onAuthPage =['/login', '/signup'].includes(location.pathname);
   const signInHref = onAuthPage ? `/login${location.search}` : `/login?next=${encodeURIComponent(location.pathname + location.search)}`;
 
   return (
@@ -23,10 +29,10 @@ export default function Nav() {
             Atlas
           </Link>
           <nav className="nav-explore" aria-label="Explore">
-            <Link to="/#destinations" className="nav-link">
+            <Link to="/#destinations" className="nav-link" onClick={() => scrollToSection('destinations')}>
               Destinations
             </Link>
-            <Link to="/?tab=hotels#search" className="nav-link">
+            <Link to="/#best-hotels" className="nav-link" onClick={() => scrollToSection('best-hotels')}>
               Stays
             </Link>
           </nav>

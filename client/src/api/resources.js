@@ -15,6 +15,7 @@ export const flightsApi = {
 export const hotelsApi = {
   search: (query, opts) => api('/hotels', { query, ...opts }),
   get: (id, opts) => api(`/hotels/${id}`, opts),
+  featured: (query, opts) => api('/hotels/featured', { query, ...opts }),
 };
 
 export const reviewsApi = {

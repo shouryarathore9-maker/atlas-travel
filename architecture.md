@@ -249,6 +249,8 @@ Changes made while building the MVP. Each is additive or a clarification; nothin
    - Bookings are created only by `POST /api/payments/mock` on success (as §6 describes); there is no separate `POST /api/bookings`.
    - Added `GET /api/bookings/:key` (by booking reference or id, owner only) for the confirmation/detail page, and `GET /api/hotels/cities`.
    - `GET /api/auth/me` returns `200 { user: null }` when signed out (instead of 401) so the SPA's session check never logs a console error. Protected routes still return 401/403.
+   - Added `GET /api/hotels/featured?limit=` (public) for the homepage "Best hotels" section (story #19): hotels with `starRating ≥ 4` **and** `rating.average ≥ 4.0`, sorted by guest rating, then stars, then review count; returns a "from" nightly price (cheapest room, before taxes).
+   - "Similar stays" (story #18) reuses `GET /api/hotels` with the viewer's current dates/party, so no new endpoint was needed.
    - Admin also has `GET /api/admin/flights[/:id]` and `GET /api/admin/hotels[/:id]` (list with search + pagination, and single item for the edit form).
 6. **Inventory is not per-date for hotels**: `roomsAvailable` is a single counter per room type (decremented on booking, restored on cancel). Flight seats are per flight document, since each seeded flight is one dated departure.
 7. **Folder structure** adds `server/services` (pricing, inventory, refunds), `server/utils`, `server/config`, `server/tests`, and `client/src/lib` (formatting, pricing mirror, validation).
