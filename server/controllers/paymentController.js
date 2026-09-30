@@ -6,6 +6,7 @@ import Hotel from '../models/Hotel.js';
 import Payment from '../models/Payment.js';
 import { istMidnight } from '../utils/dates.js';
 import { HttpError } from '../utils/httpError.js';
+import { personName } from '../utils/names.js';
 import { dateString } from '../utils/query.js';
 import {
   generateReference,
@@ -17,7 +18,7 @@ import {
 } from '../services/bookingService.js';
 
 const objectId = z.string().refine((id) => mongoose.isValidObjectId(id), 'Invalid item id');
-const personName = z.string().trim().min(2, 'Enter the full name').max(80);
+const travellerName = personName();
 const contactSchema = z.object({
   email: z.string().trim().toLowerCase().email('Enter a valid email address'),
   phone: z.string().trim().regex(/^\d{10}$/, 'Enter a 10-digit mobile number'),
@@ -30,7 +31,7 @@ const flightBookingSchema = z.object({
   travellers: z
     .array(
       z.object({
-        name: personName,
+        name: travellerName,
         ageCategory: z.enum(['adult', 'child']),
         seat: z.string().trim().toUpperCase().optional().default(''),
         meal: z.string().trim().max(80).optional().default(''),
@@ -51,7 +52,7 @@ const hotelBookingSchema = z.object({
   adults: z.number().int().min(1).max(24),
   children: z.number().int().min(0).max(12).default(0),
   guests: z
-    .array(z.object({ name: personName, ageCategory: z.enum(['adult', 'child']) }))
+    .array(z.object({ name: travellerName, ageCategory: z.enum(['adult', 'child']) }))
     .min(1, 'Add at least one guest')
     .max(24),
   specialRequests: z.string().trim().max(500).optional().default(''),
@@ -110,6 +111,17 @@ async function buildHotelBooking(input) {
   };
 }
 
+// The winning request reserves inventory a few milliseconds before its booking is saved,
+// so poll briefly for it before concluding the failure is genuine.
+async function awaitConcurrentBooking(userId, idempotencyKey, attempts = 5, delayMs = 100) {
+  for (let i = 0; i < attempts; i++) {
+    const booking = await Booking.findOne({ userId, idempotencyKey });
+    if (booking) return booking;
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  return null;
+}
+
 export async function mockPayment(req, res) {
   const { idempotencyKey, method, simulateFailure, booking: input } = req.validated.body;
   const userId = req.user._id;
@@ -118,7 +130,16 @@ export async function mockPayment(req, res) {
   const existing = await Booking.findOne({ userId, idempotencyKey });
   if (existing) return res.status(200).json({ booking: existing, payment: { status: 'success' } });
 
-  const draft = input.type === 'flight' ? await buildFlightBooking(input) : await buildHotelBooking(input);
+  let draft;
+  try {
+    draft = input.type === 'flight' ? await buildFlightBooking(input) : await buildHotelBooking(input);
+  } catch (err) {
+    // An identical request (double-click, retry) may have just booked these seats/rooms itself.
+    // In that case answer with its booking rather than a misleading "no longer available".
+    const winner = await awaitConcurrentBooking(userId, idempotencyKey);
+    if (winner) return res.status(200).json({ booking: winner, payment: { status: 'success' } });
+    throw err;
+  }
   const amount = draft.fareBreakdown.total;
 
   const failureRate = Number(process.env.MOCK_PAYMENT_FAILURE_RATE) || 0;
@@ -130,7 +151,13 @@ export async function mockPayment(req, res) {
     });
   }
 
-  await reserveInventory(draft);
+  try {
+    await reserveInventory(draft);
+  } catch (err) {
+    const winner = await awaitConcurrentBooking(userId, idempotencyKey);
+    if (winner) return res.status(200).json({ booking: winner, payment: { status: 'success' } });
+    throw err;
+  }
   let booking;
   try {
     booking = await Booking.create({ ...draft, userId, idempotencyKey, bookingReference: generateReference() });

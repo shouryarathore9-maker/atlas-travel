@@ -3,12 +3,13 @@ import { z } from 'zod';
 import User from '../models/User.js';
 import { AUTH_COOKIE, cookieOptions, signToken } from '../middleware/auth.js';
 import { HttpError } from '../utils/httpError.js';
+import { personName } from '../utils/names.js';
 
 // Used to keep login timing similar whether or not the email exists.
 const DUMMY_HASH = bcrypt.hashSync('atlas-timing-guard', 10);
 
 export const registerSchema = z.object({
-  name: z.string().trim().min(1, 'Enter your name').max(80),
+  name: personName('Enter your name'),
   email: z.string().trim().toLowerCase().email('Enter a valid email address'),
   password: z
     .string()

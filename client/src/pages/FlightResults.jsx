@@ -10,6 +10,7 @@ import { useAsync } from '../hooks/useAsync.js';
 import { useDocumentTitle } from '../hooks/useDocumentTitle.js';
 import { useResultParams } from '../hooks/useResultParams.js';
 import { cityByCode } from '../lib/cities.js';
+import { todayIst } from '../lib/dates.js';
 import { formatDateString, pluralize } from '../lib/format.js';
 
 const DEPARTURE_OPTIONS = [
@@ -37,9 +38,13 @@ export default function FlightResults() {
   useDocumentTitle(`Flights ${from} to ${to}`);
 
   const queryKey = JSON.stringify(q);
+  const pastDate = Boolean(q.date) && q.date < todayIst();
   const { data, error, loading, reload } = useAsync(
     (signal) =>
-      flightsApi.search(
+      // A date that has already passed can't have bookable flights — skip the request.
+      pastDate
+        ? Promise.resolve({ results: [], total: 0, page: 1, pages: 1, unfilteredTotal: 0, pastDates: true, facets: { airlines: [], stops: [], minPrice: 0, maxPrice: 0 } })
+        : flightsApi.search(
         {
           origin: q.origin,
           destination: q.destination,
@@ -156,7 +161,19 @@ export default function FlightResults() {
           {data && (
             <div className={loading ? 'results-list is-loading' : 'results-list'}>
               {data.results.length === 0 &&
-                (data.unfilteredTotal === 0 ? (
+                (data.pastDates ? (
+                  <EmptyState
+                    title="That date has already passed"
+                    icon="calendar"
+                    action={
+                      <button type="button" className="btn btn-secondary" onClick={() => setEditing(true)}>
+                        Pick a new date
+                      </button>
+                    }
+                  >
+                    Choose today or a later date to see flights.
+                  </EmptyState>
+                ) : data.unfilteredTotal === 0 ? (
                   <EmptyState
                     title="No flights on this route that day"
                     action={

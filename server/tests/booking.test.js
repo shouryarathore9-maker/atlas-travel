@@ -56,6 +56,33 @@ describe('mock payment → booking', () => {
     expect(await Booking.countDocuments()).toBe(1);
   });
 
+  it('two identical requests at the same instant get the same single booking (QA-2 finding)', async () => {
+    const flight = await createFlight();
+    const agent = await loggedInAgent();
+    const body = flightPayment(flight);
+    const [a, b] = await Promise.all([agent.post('/api/payments/mock').send(body), agent.post('/api/payments/mock').send(body)]);
+    expect([a.status, b.status].sort()).toEqual([200, 201]);
+    expect(a.body.booking.bookingReference).toBe(b.body.booking.bookingReference);
+    expect(await Booking.countDocuments()).toBe(1);
+  });
+
+  it('rejects names with digits or emoji, and over-long names, with friendly messages', async () => {
+    const flight = await createFlight();
+    const agent = await loggedInAgent();
+    const tryName = async (name) => {
+      const body = flightPayment(flight);
+      body.booking.travellers[0].name = name;
+      return (await agent.post('/api/payments/mock').send(body).expect(400)).body.error.message;
+    };
+    expect(await tryName('😀😀')).toMatch(/letters only/);
+    expect(await tryName('R2 D2')).toMatch(/letters only/);
+    expect(await tryName('A'.repeat(300))).toBe('Names can be at most 80 characters');
+    // Non-Latin scripts and punctuation that real names use are fine
+    const ok = flightPayment(flight);
+    ok.booking.travellers[0].name = 'प्रिया D’Souza-Nair';
+    await agent.post('/api/payments/mock').send(ok).expect(201);
+  });
+
   it('a failed payment records the attempt but creates no booking', async () => {
     const flight = await createFlight();
     const agent = await loggedInAgent();

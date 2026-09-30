@@ -8,7 +8,7 @@ import { useAuth } from '../hooks/useAuth.jsx';
 import { useDocumentTitle } from '../hooks/useDocumentTitle.js';
 import { clearDraft, loadDraft, updateDraft } from '../lib/checkoutDraft.js';
 import { formatPrice } from '../lib/format.js';
-import { validateDetails } from '../lib/validation.js';
+import { NAME_MAX, validateDetails } from '../lib/validation.js';
 
 function initialDetails(draft, user) {
   if (draft.details) return draft.details;
@@ -120,6 +120,7 @@ export default function Checkout() {
                       {details.people.length > 1 && <legend>Traveller {i + 1}</legend>}
                       <Field
                         label="Full name"
+                        maxLength={NAME_MAX}
                         autoComplete={i === 0 ? 'name' : 'off'}
                         value={p.name}
                         onChange={setPerson(i, 'name')}

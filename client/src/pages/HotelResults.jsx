@@ -163,7 +163,19 @@ export default function HotelResults() {
           {data && (
             <div className={loading ? 'results-list is-loading' : 'results-list'}>
               {data.results.length === 0 &&
-                (data.unfilteredTotal === 0 ? (
+                (data.pastDates ? (
+                  <EmptyState
+                    title="Those dates have already passed"
+                    icon="calendar"
+                    action={
+                      <button type="button" className="btn btn-secondary" onClick={() => setEditing(true)}>
+                        Pick new dates
+                      </button>
+                    }
+                  >
+                    Choose a check-in date from today onwards to see available stays.
+                  </EmptyState>
+                ) : data.unfilteredTotal === 0 ? (
                   <EmptyState
                     title="No stays available for those dates"
                     action={

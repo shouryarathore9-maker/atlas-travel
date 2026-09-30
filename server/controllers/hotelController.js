@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import Hotel from '../models/Hotel.js';
 import Review from '../models/Review.js';
-import { nightsBetween } from '../utils/dates.js';
+import { nightsBetween, todayIstString } from '../utils/dates.js';
 import { HttpError } from '../utils/httpError.js';
 import { csv, dateString, optionalNumber, paginate, pagination } from '../utils/query.js';
 
@@ -43,6 +43,18 @@ const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 export async function searchHotels(req, res) {
   const q = req.validated.query;
   const nights = nightsBetween(q.checkIn, q.checkOut);
+  // Past stays can't be booked, so they have no results (the client shows a friendly message).
+  if (q.checkIn < todayIstString()) {
+    return res.json({
+      results: [],
+      total: 0,
+      page: 1,
+      pages: 1,
+      unfilteredTotal: 0,
+      pastDates: true,
+      facets: { amenities: [], stars: [], minPrice: 0, maxPrice: 0 },
+    });
+  }
   const candidates = await Hotel.find({ city: new RegExp(`^${escapeRegex(q.city)}$`, 'i') }).lean();
 
   const available = candidates

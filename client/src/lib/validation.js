@@ -1,8 +1,21 @@
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Mirrors server/utils/names.js: letters in any script plus spaces, apostrophes, hyphens and dots.
+export const NAME_MAX = 80;
+const NAME_PATTERN = /^[\p{L}\p{M}][\p{L}\p{M} .'’-]*$/u;
+export function nameError(value, emptyMessage = 'Enter the full name as on ID') {
+  const name = value.trim();
+  if (!name) return emptyMessage;
+  if (name.length < 2) return 'Enter the full name as on ID';
+  if (name.length > NAME_MAX) return `Names can be at most ${NAME_MAX} characters`;
+  if (!NAME_PATTERN.test(name)) return 'Use letters only — spaces, apostrophes, hyphens and dots are fine';
+  return null;
+}
+
 export function validateSignup({ name, email, password, phone }) {
   const errors = {};
-  if (!name.trim()) errors.name = 'Enter your name';
+  const nameProblem = nameError(name, 'Enter your name');
+  if (nameProblem) errors.name = nameProblem;
   if (!EMAIL_RE.test(email.trim())) errors.email = 'Enter a valid email address';
   if (password.length < 8) errors.password = 'Use at least 8 characters';
   else if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) errors.password = 'Include at least one letter and one number';
@@ -14,7 +27,8 @@ export function validateSignup({ name, email, password, phone }) {
 export function validateDetails(details) {
   const errors = {};
   details.people.forEach((p, i) => {
-    if (p.name.trim().length < 2) errors[`people.${i}.name`] = 'Enter the full name as on ID';
+    const problem = nameError(p.name);
+    if (problem) errors[`people.${i}.name`] = problem;
   });
   if (!EMAIL_RE.test(details.email.trim())) errors.email = 'Enter a valid email address';
   if (!/^\d{10}$/.test(details.phone.trim())) errors.phone = 'Enter a 10-digit mobile number';

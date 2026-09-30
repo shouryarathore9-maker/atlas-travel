@@ -77,6 +77,12 @@ describe('hotel search', () => {
     expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
+  it('returns no hotels for past dates (QA-2 finding)', async () => {
+    await createHotel();
+    const res = await request(app).get('/api/hotels').query({ city: 'Delhi', checkIn: futureDate(-10), checkOut: futureDate(-8) }).expect(200);
+    expect(res.body).toMatchObject({ total: 0, pastDates: true });
+  });
+
   it('rejects check-out before check-in', async () => {
     const res = await request(app)
       .get('/api/hotels')

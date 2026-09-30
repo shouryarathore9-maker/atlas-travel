@@ -4,7 +4,7 @@ import Field from '../components/Field.jsx';
 import { Banner } from '../components/States.jsx';
 import { useAuth } from '../hooks/useAuth.jsx';
 import { useDocumentTitle } from '../hooks/useDocumentTitle.js';
-import { EMAIL_RE, validateSignup } from '../lib/validation.js';
+import { EMAIL_RE, NAME_MAX, validateSignup } from '../lib/validation.js';
 
 // Only allow same-site relative redirects after login.
 function safeNext(params) {
@@ -125,7 +125,7 @@ export function Signup() {
           </Banner>
         )}
         <form onSubmit={submit} noValidate className="stack">
-          <Field label="Full name" autoComplete="name" {...form.field('name')} />
+          <Field label="Full name" autoComplete="name" maxLength={NAME_MAX} {...form.field('name')} />
           <Field label="Email" type="email" autoComplete="email" {...form.field('email')} />
           <Field
             label="Password"
