@@ -5,12 +5,14 @@ import { HttpError } from '../utils/httpError.js';
 export const AUTH_COOKIE = 'atlas_token';
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
+// Same-origin cookie. `Secure` on Vercel (every deployment is HTTPS; Vercel sets VERCEL=1)
+// and in any production run; off for plain-http local development.
 export function cookieOptions() {
-  const isProd = process.env.NODE_ENV === 'production';
+  const https = process.env.VERCEL === '1' || process.env.NODE_ENV === 'production';
   return {
     httpOnly: true,
-    secure: isProd,
-    sameSite: process.env.COOKIE_SAMESITE || 'lax',
+    secure: https,
+    sameSite: 'lax',
     maxAge: SEVEN_DAYS_MS,
     path: '/',
   };

@@ -1,4 +1,6 @@
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+// The API is always same-origin: Vite proxies /api in development; on Vercel the same
+// project serves /api. Relative URLs keep the httpOnly auth cookie first-party.
+const BASE_URL = '';
 
 export class ApiError extends Error {
   constructor(status, { message, code, details } = {}, body = {}) {

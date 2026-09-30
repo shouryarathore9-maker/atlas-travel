@@ -12,22 +12,28 @@ import Review from '../models/Review.js';
 import User from '../models/User.js';
 import { generateFlights, generateHotels, generateReviews } from './generate.js';
 
-// Local demo accounts (test values only — override via env vars for a public deployment).
+// Demo accounts. Passwords come only from server/.env (never committed): the same Atlas
+// database backs the public site, so a password written in this file would be public.
 const DEMO_USERS = [
   {
     name: 'Atlas Admin',
     email: process.env.SEED_ADMIN_EMAIL || 'admin@atlas.test',
-    password: process.env.SEED_ADMIN_PASSWORD || 'AtlasAdmin2026',
+    password: process.env.SEED_ADMIN_PASSWORD,
     role: 'admin',
   },
   {
     name: 'Priya Traveller',
     email: process.env.SEED_TRAVELLER_EMAIL || 'priya@atlas.test',
-    password: process.env.SEED_TRAVELLER_PASSWORD || 'AtlasTravel2026',
+    password: process.env.SEED_TRAVELLER_PASSWORD,
     role: 'traveler',
     phone: '9876543210',
   },
 ];
+const missing = ['SEED_ADMIN_PASSWORD', 'SEED_TRAVELLER_PASSWORD'].filter((k) => !process.env[k]);
+if (missing.length) {
+  console.error(`Set ${missing.join(' and ')} in server/.env before seeding (see .env.example).`);
+  process.exit(1);
+}
 
 const SEED_DAYS = Number(process.env.SEED_DAYS) || 21;
 
@@ -61,7 +67,7 @@ async function main() {
   }
 
   console.log(`Seeded ${flights.length} flights (${SEED_DAYS} days), ${hotels.length} hotels, ${reviews.length} reviews.`);
-  console.log(`Demo accounts: ${DEMO_USERS.map((u) => `${u.email} (${u.role})`).join(', ')} — passwords are in server/seed/index.js`);
+  console.log(`Demo accounts: ${DEMO_USERS.map((u) => `${u.email} (${u.role})`).join(', ')} — passwords are the SEED_* values in server/.env`);
   console.timeEnd('seed');
 }
 

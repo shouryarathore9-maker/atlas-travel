@@ -1,11 +1,16 @@
 {
   "name": "atlas",
   "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "install:all": "npm install && npm --prefix server install && npm --prefix client install",
     "dev": "concurrently -n server,client -c yellow,cyan \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
     "build": "npm --prefix client run build",
     "seed": "npm --prefix server run seed",
+    "extend-flights": "npm --prefix server run extend-flights",
     "test": "npm --prefix server test && npm --prefix client test",
     "lint": "npm --prefix server run lint && npm --prefix client run lint"
   },

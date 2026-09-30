@@ -1,3 +1,5 @@
+// Local development server only. On Vercel, /api/index.js exports the same Express app
+// as a function instead — there is no long-running process there.
 import 'dotenv/config';
 import { createApp } from './app.js';
 import { connectDb } from './config/db.js';

@@ -16,7 +16,7 @@ Requirements: Node.js 20+ and a MongoDB connection string (MongoDB Atlas free ti
 npm run install:all
 ```
 
-1. Copy `server/.env.example` to `server/.env` and fill in `MONGODB_URI` (include a database name, e.g. `/travel_app`), a long random `JWT_SECRET` and a long random `CRON_SECRET`.
+1. Copy `server/.env.example` to `server/.env` and fill in `MONGODB_URI` (include a database name, e.g. `/travel_app`), a long random `JWT_SECRET`, a long random `CRON_SECRET`, and passwords for the two demo accounts (`SEED_ADMIN_PASSWORD`, `SEED_TRAVELLER_PASSWORD`).
 2. Seed the database (idempotent — safe to re-run; it resets inventory, reviews and bookings):
 
 ```bash
@@ -31,7 +31,7 @@ npm run dev
 
 Open http://localhost:5173.
 
-**Demo accounts** (local only) are created by the seed — one admin and one traveller. Their emails and passwords are in `server/seed/index.js`; override them with `SEED_*` env vars before seeding a public deployment.
+**Demo accounts** are created by the seed — one admin (`admin@atlas.test`) and one traveller (`priya@atlas.test`). Their passwords are the `SEED_ADMIN_PASSWORD` / `SEED_TRAVELLER_PASSWORD` values in your `server/.env`; the seed refuses to run without them, so no password is ever committed.
 
 > Seeded flights cover the next 21 days. On the live site a daily Vercel Cron job keeps that window full; locally, run `npm run extend-flights` to do the same.
 

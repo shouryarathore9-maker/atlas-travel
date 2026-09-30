@@ -8,13 +8,14 @@
     "dev": "nodemon index.js",
     "start": "node index.js",
     "seed": "node seed/index.js",
+    "extend-flights": "node seed/extend.js",
     "test": "vitest run",
     "lint": "eslint ."
   },
   "dependencies": {
+    "@vercel/functions": "^3.9.9",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
-    "cors": "^2.8.6",
     "dotenv": "^18.0.4",
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.0",
