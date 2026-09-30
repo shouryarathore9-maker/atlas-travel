@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Field from '../components/Field.jsx';
 import MockPayment from '../components/MockPayment.jsx';
@@ -28,6 +28,7 @@ export default function Checkout() {
   const [touched, setTouched] = useState({});
   const [step, setStep] = useState(draft?.details ? 'pay' : 'details');
   const [status, setStatus] = useState({ state: 'idle' }); // idle | processing | failed | error
+  const paying = useRef(false); // ignores a second click before React re-renders
 
   if (!draft) {
     return (
@@ -88,6 +89,8 @@ export default function Checkout() {
   }
 
   async function pay(choice) {
+    if (paying.current) return;
+    paying.current = true;
     setStatus({ state: 'processing', method: choice.method });
     // A short, honest pause so the "waiting for payment" state is perceivable.
     await new Promise((r) => setTimeout(r, choice.method === 'upi' ? 1500 : 900));
@@ -97,10 +100,14 @@ export default function Checkout() {
       navigate(`/bookings/${booking.bookingReference}/confirmation`, { replace: true });
     } catch (err) {
       setStatus({ state: err.code === 'PAYMENT_FAILED' ? 'failed' : 'error', error: err });
+    } finally {
+      paying.current = false;
     }
   }
 
-  const backToItem = isFlight ? `/flights/${draft.itemId}?travellers=${draft.travellers.length}` : `/hotels/${draft.itemId}`;
+  const backToItem = isFlight
+    ? `/flights/${draft.itemId}?travellers=${draft.travellers.length}&cabin=${draft.fareType === 'Business' ? 'business' : 'economy'}`
+    : `/hotels/${draft.itemId}?${new URLSearchParams({ checkIn: draft.checkIn, checkOut: draft.checkOut, adults: draft.adults, children: draft.children, rooms: draft.rooms })}`;
 
   return (
     <main id="main" className="container page">
@@ -182,7 +189,24 @@ export default function Checkout() {
                 </Banner>
               )}
               {status.state === 'error' && (
-                <Banner tone="error" action={<Link to={backToItem} className="btn btn-secondary btn-sm">Choose again</Link>}>
+                <Banner
+                  tone="error"
+                  action={
+                    status.error.code === 'VALIDATION_ERROR' ? (
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setStatus({ state: 'idle' }); setStep('details'); }}>
+                        Edit details
+                      </button>
+                    ) : ['NETWORK', 'SERVER_ERROR', 'RATE_LIMITED'].includes(status.error.code) ? (
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => setStatus({ state: 'idle' })}>
+                        Try again
+                      </button>
+                    ) : (
+                      <Link to={backToItem} className="btn btn-secondary btn-sm">
+                        Choose again
+                      </Link>
+                    )
+                  }
+                >
                   <p>{status.error.message}</p>
                 </Banner>
               )}
@@ -214,12 +238,17 @@ export default function Checkout() {
                 </p>
               </section>
 
-              {status.state === 'processing' ? (
+              {status.state === 'processing' && (
                 <div className="card">
                   <Spinner label={status.method === 'upi' ? 'Waiting for payment…' : 'Processing payment…'} />
                 </div>
-              ) : (
-                <MockPayment amount={total} busy={status.state === 'processing'} onPay={pay} />
+              )}
+              {/* Kept mounted while processing so a declined card keeps its method and details for the retry.
+                  Hidden after an availability error: the only way forward is to choose again. */}
+              {status.state !== 'error' && (
+                <div hidden={status.state === 'processing'}>
+                  <MockPayment amount={total} busy={status.state === 'processing'} onPay={pay} />
+                </div>
               )}
             </>
           )}

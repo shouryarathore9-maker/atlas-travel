@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import { formatPrice } from '../lib/format.js';
 
 export function CheckboxGroup({ legend, options, selected, onChange }) {
+  if (!options.length) return null; // never show a heading with nothing under it
   const toggle = (value) =>
     onChange(selected.includes(value) ? selected.filter((v) => v !== value) : [...selected, value]);
   return (

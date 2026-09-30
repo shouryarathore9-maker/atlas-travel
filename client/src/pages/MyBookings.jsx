@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Modal from '../components/Modal.jsx';
 import { Banner, EmptyState, ErrorState, SkeletonList } from '../components/States.jsx';
@@ -14,8 +14,11 @@ export default function MyBookings() {
   const [confirming, setConfirming] = useState(null);
   const [cancelState, setCancelState] = useState({ busy: false, error: null });
   const [notice, setNotice] = useState(null);
+  const cancelling = useRef(false); // a fast double-click sends one request, not two
 
   async function cancel() {
+    if (cancelling.current) return;
+    cancelling.current = true;
     setCancelState({ busy: true, error: null });
     try {
       const { booking } = await bookingsApi.cancel(confirming._id);
@@ -25,6 +28,8 @@ export default function MyBookings() {
       setCancelState({ busy: false, error: null });
     } catch (err) {
       setCancelState({ busy: false, error: err.message });
+    } finally {
+      cancelling.current = false;
     }
   }
 

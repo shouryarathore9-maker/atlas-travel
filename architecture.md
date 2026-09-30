@@ -256,7 +256,11 @@ Changes made while building the MVP. Each is additive or a clarification; nothin
 7. **Folder structure** adds `server/services` (pricing, inventory, refunds), `server/utils`, `server/config`, `server/tests`, and `client/src/lib` (formatting, pricing mirror, validation).
 8. **Password hashing** uses `bcryptjs` (pure-JS bcrypt, same algorithm and hash format) to avoid native build tooling on Windows.
 9. **Rate limiting** — `POST /api/auth/register` and `/login` share a strict limit (30 requests / 15 min / IP). `GET /api/auth/me` and `/logout` use a separate, lenient limit (600 / 15 min), because the session check runs on every page load and must not lock users out.
-10. **Seed flights** are dated departures for the next `SEED_DAYS` (default 21) days from when the seed runs; re-run `npm run seed` to roll the window forward.
+10. **Cancellation windows of 0** — `freeUntilHoursBeforeDeparture: 0` (flights) or `freeUntilDaysBeforeCheckIn: 0` (hotels) means *no* free-cancellation window: `policySnapshot.freeUntil` is `null` and the stated fee always applies. (Found in QA-2: it was previously treated as "free until departure / check-in".)
+11. **Concurrent duplicate payments** — if two requests with the same `idempotencyKey` race, the loser briefly polls (≤ 0.5 s) for the winner's booking and returns it (200) instead of a misleading "no longer available" error. Exactly one booking is ever created.
+12. **Names** (traveller, guest, account) must be 2–80 characters of letters in any script plus spaces, apostrophes, hyphens and dots — digits and emoji are rejected with a friendly message (QA-2).
+13. **Hotel search with a past check-in** returns no results (`pastDates: true`) so the UI can explain why.
+14. **Seed flights** are dated departures for the next `SEED_DAYS` (default 21) days from when the seed runs; re-run `npm run seed` to roll the window forward.
 
 ## Decisions & Defaults (previously open questions — resolved so the agent can build without stopping)
 1. **Frontend/backend split (Vercel + Render/Railway):** final for MVP, as described in section 2.

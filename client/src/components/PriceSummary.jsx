@@ -15,7 +15,8 @@ export default function PriceSummary({ title = 'Price summary', lines, total, no
           ))}
           <div className="price-line price-total">
             <dt>Total</dt>
-            <dd>{formatPrice(total)}</dd>
+            {/* Nothing chosen yet (e.g. no room selected) → a dash, not a misleading ₹0 */}
+            <dd>{lines.some(Boolean) ? formatPrice(total) : <span aria-label="Not yet calculated">—</span>}</dd>
           </div>
         </dl>
         {note && <p className="small muted">{note}</p>}

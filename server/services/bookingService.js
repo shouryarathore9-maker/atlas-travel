@@ -65,9 +65,11 @@ export function priceFlight(flight, { fareType, travellers }) {
     seats,
     fareBreakdown: { base, taxes, addons, discounts: 0, total: base + taxes + addons },
     policySnapshot: {
-      freeUntil: new Date(
-        new Date(flight.departureTime).getTime() - fare.cancellationPolicy.freeUntilHoursBeforeDeparture * 3600 * 1000,
-      ),
+      // A 0-hour window means "no free cancellation" (the fee always applies), not "free until departure".
+      freeUntil:
+        fare.cancellationPolicy.freeUntilHoursBeforeDeparture > 0
+          ? new Date(new Date(flight.departureTime).getTime() - fare.cancellationPolicy.freeUntilHoursBeforeDeparture * 3600 * 1000)
+          : null,
       feeAfterCutoff: fare.cancellationPolicy.feeAfterCutoff,
     },
   };
@@ -90,7 +92,11 @@ export function priceHotel(hotel, { roomTypeName, rooms, checkIn, checkOut, adul
     nights,
     fareBreakdown: { base, taxes, addons: 0, discounts: 0, total: base + taxes },
     policySnapshot: {
-      freeUntil: new Date(istMidnight(checkIn).getTime() - room.cancellationPolicy.freeUntilDaysBeforeCheckIn * DAY_MS),
+      // Likewise, 0 days means the cancellation fee applies from the moment of booking.
+      freeUntil:
+        room.cancellationPolicy.freeUntilDaysBeforeCheckIn > 0
+          ? new Date(istMidnight(checkIn).getTime() - room.cancellationPolicy.freeUntilDaysBeforeCheckIn * DAY_MS)
+          : null,
       feeAfterCutoff: room.cancellationPolicy.feeAfterCutoff,
     },
   };

@@ -49,6 +49,14 @@ export default function Home() {
     <div className="home">
       <Nav />
       <main id="main">
+        {/* Redirect notices (e.g. "admins only") sit above the hero so they're seen immediately. */}
+        {location.state?.notice && (
+          <div className="container home-notice">
+            <Banner tone="error">
+              <p>{location.state.notice}</p>
+            </Banner>
+          </div>
+        )}
         <section className="hero" aria-labelledby="hero-heading">
           <picture className="hero-image">
             <source media="(max-width: 767px)" srcSet="/images/seed/hero-mobile.webp" />
@@ -72,13 +80,6 @@ export default function Home() {
         </section>
 
         <div className="container">
-          {location.state?.notice && (
-            <div style={{ marginTop: 'var(--space-5)' }}>
-              <Banner tone="error">
-                <p>{location.state.notice}</p>
-              </Banner>
-            </div>
-          )}
 
           <section className="section" id="destinations" aria-labelledby="featured-heading">
             <div className="spread section-head">

@@ -148,6 +148,17 @@ describe('my bookings & cancellation', () => {
     await agent.patch(`/api/bookings/${body.booking._id}/cancel`).expect(400);
   });
 
+  it('a fare with no free-cancellation window (0h) refunds total minus the fee, even well before departure (QA-2 finding)', async () => {
+    const flight = await createFlight();
+    const agent = await loggedInAgent();
+    const body = flightPayment(flight);
+    body.booking.fareType = 'Saver'; // freeUntilHoursBeforeDeparture: 0, fee 3500
+    const { body: paid } = await agent.post('/api/payments/mock').send(body).expect(201);
+    expect(paid.booking.policySnapshot.freeUntil).toBeNull();
+    const { body: cancelled } = await agent.patch(`/api/bookings/${paid.booking._id}/cancel`).expect(200);
+    expect(cancelled.booking.cancellation.refundAmount).toBe(paid.booking.fareBreakdown.total - 3500);
+  });
+
   it('computes refund as total minus fee after the free-cancellation cutoff', () => {
     const booking = { fareBreakdown: { total: 7000 }, policySnapshot: { freeUntil: new Date(Date.now() - 1000), feeAfterCutoff: 3500 } };
     expect(computeRefund(booking)).toBe(3500);

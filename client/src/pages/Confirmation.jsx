@@ -9,13 +9,21 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle.js';
 // Read-only: refreshing this page just re-fetches the booking, it never creates another one.
 export default function Confirmation() {
   const { reference } = useParams();
-  useDocumentTitle('Booking confirmed');
   const { data, error, reload } = useAsync((signal) => bookingsApi.get(reference, { signal }), [reference]);
+  const notFound = error?.status === 404;
+  useDocumentTitle(error ? (notFound ? 'Booking not found' : 'Booking unavailable') : data ? 'Booking confirmed' : 'Booking');
 
   if (error) {
     return (
       <main id="main" className="container page">
-        <ErrorState error={error} onRetry={error.status === 404 ? undefined : reload} title={error.status === 404 ? 'Booking not found' : undefined} />
+        <ErrorState error={error} onRetry={notFound ? undefined : reload} title={notFound ? 'Booking not found' : undefined} />
+        {notFound && (
+          <p className="row" style={{ justifyContent: 'center', marginTop: 'var(--space-4)' }}>
+            <Link to="/bookings" className="btn btn-secondary">
+              View my bookings
+            </Link>
+          </p>
+        )}
       </main>
     );
   }

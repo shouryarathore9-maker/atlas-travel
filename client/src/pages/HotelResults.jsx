@@ -66,7 +66,8 @@ export default function HotelResults() {
   const activeFilters = q.stars.length || q.amenities.length || q.minRating || q.maxPrice;
   const clearFilters = () => update({ stars: [], amenities: [], minRating: undefined, maxPrice: undefined });
 
-  const filters = data && (
+  // Nothing to filter (no results at all, e.g. past dates) → no filter panel or Filters button.
+  const filters = data && data.unfilteredTotal > 0 && (
     <div className="filters">
       <div className="spread">
         <h2 className="filters-title">Filters</h2>
@@ -142,9 +143,11 @@ export default function HotelResults() {
               {data ? pluralize(data.total, 'stay') : 'Searching stays…'}
             </h1>
             <div className="row">
+              {filters && (
               <button type="button" className="btn btn-secondary btn-sm filters-toggle" onClick={() => setFiltersOpen(true)}>
                 <Icon name="filter" size={18} /> Filters
               </button>
+              )}
               <label className="sort-control">
                 <span className="small">Sort</span>
                 <select className="select" value={q.sort || 'relevance'} onChange={(e) => update({ sort: e.target.value })}>

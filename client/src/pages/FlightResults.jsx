@@ -67,7 +67,8 @@ export default function FlightResults() {
   const activeFilters = FILTER_KEYS.some((k) => (Array.isArray(q[k]) ? q[k].length : q[k]));
   const clearFilters = () => update({ stops: [], airlines: [], departure: [], maxPrice: undefined });
 
-  const filters = data && (
+  // Nothing to filter (no results at all, e.g. past dates) → no filter panel or Filters button.
+  const filters = data && data.unfilteredTotal > 0 && (
     <div className="filters">
       <div className="spread">
         <h2 className="filters-title">Filters</h2>
@@ -140,9 +141,11 @@ export default function FlightResults() {
               {data ? pluralize(data.total, 'flight') : 'Searching flights…'}
             </h1>
             <div className="row">
+              {filters && (
               <button type="button" className="btn btn-secondary btn-sm filters-toggle" onClick={() => setFiltersOpen(true)}>
                 <Icon name="filter" size={18} /> Filters
               </button>
+              )}
               <label className="sort-control">
                 <span className="small">Sort</span>
                 <select className="select" value={q.sort || 'price'} onChange={(e) => update({ sort: e.target.value })}>

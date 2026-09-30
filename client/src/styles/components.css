@@ -162,7 +162,7 @@ legend {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: 8px 16px;
+  padding: 4px 16px;
   background: var(--color-surface);
   border: 1px solid var(--color-sand);
   border-radius: var(--radius-md);
@@ -196,7 +196,9 @@ legend {
 .pill-field select {
   border: none;
   background: transparent;
-  padding: 2px 0;
+  /* Taller hit area (QA-2: was 25px) while the pill keeps its ~60px look */
+  padding: 6px 0;
+  min-height: 36px;
   font-size: 1rem;
   font-weight: 500;
   width: 100%;
