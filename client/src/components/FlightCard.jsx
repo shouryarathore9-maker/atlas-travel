@@ -7,8 +7,11 @@ const istDay = (date) => Math.floor((new Date(date).getTime() + 5.5 * 3600 * 100
 
 export default function FlightCard({ flight, travellers, cabin }) {
   const plusDays = istDay(flight.arrivalTime) - istDay(flight.departureTime);
+  const href = `/flights/${flight._id}?${new URLSearchParams({ travellers, cabin })}`;
   return (
-    <article className="result-card flight-card fade-in">
+    // Whole card is clickable, same pattern as HotelCard: overlay link under the real button.
+    <article className="result-card flight-card clickable-card fade-in">
+      <Link to={href} className="card-overlay-link" tabIndex={-1} aria-hidden="true" />
       <div className="flight-card-airline">
         <h2 className="result-title">{flight.airline}</h2>
         <p className="small muted">
@@ -40,8 +43,8 @@ export default function FlightCard({ flight, travellers, cabin }) {
         <p className="price">{formatPrice(flight.price)}</p>
         <p className="small muted">per traveller</p>
         <Link
-          to={`/flights/${flight._id}?${new URLSearchParams({ travellers, cabin })}`}
-          className="btn btn-secondary btn-sm"
+          to={href}
+          className="btn btn-secondary btn-sm card-cta"
           aria-label={`View fares for ${flight.airline} ${flight.flightNumber} at ${formatTime(flight.departureTime)}`}
         >
           View fares
