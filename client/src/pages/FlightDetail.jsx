@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import FlightRouteMap from '../components/FlightRouteMap.jsx';
 import Icon from '../components/Icon.jsx';
 import PriceSummary from '../components/PriceSummary.jsx';
 import { RatingBadge } from '../components/Rating.jsx';
@@ -102,6 +103,7 @@ function FlightBooking({ flight, reviews, count, cabin }) {
         ← Back
       </button>
 
+      <div className="flight-header">
       <header className="detail-header">
         <p className="eyebrow">
           {flight.airline} · {flight.flightNumber} · {flight.aircraftType}
@@ -133,6 +135,8 @@ function FlightBooking({ flight, reviews, count, cabin }) {
           <RatingBadge rating={flight.rating} />
         </div>
       </header>
+      <FlightRouteMap origin={flight.origin} destination={flight.destination} />
+      </div>
 
       {departed && (
         <Banner tone="error">

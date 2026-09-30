@@ -573,9 +573,95 @@
 .detail-header .row {
   margin-top: var(--space-3);
 }
+/* Flight detail header: times on the left, illustrated route map top-right (QA-1 #4) */
+.flight-header {
+  display: grid;
+  gap: var(--space-5);
+  margin-bottom: var(--space-5);
+}
+.flight-header .detail-header {
+  margin-bottom: 0;
+  min-width: 0;
+}
+@media (min-width: 1024px) {
+  .flight-header {
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 440px);
+    align-items: start;
+  }
+}
+/* A roomier middle column so "2h 20m" and "Non-stop" each stay on one line */
 .flight-hero-times {
-  max-width: 640px;
+  max-width: 680px;
   margin: var(--space-4) 0;
+  grid-template-columns: minmax(0, 1fr) minmax(128px, 168px) minmax(0, 1fr);
+  align-items: start;
+  column-gap: var(--space-5);
+}
+.flight-hero-times .timeline-mid {
+  padding-top: 6px;
+  white-space: nowrap;
+}
+.flight-hero-times .timeline-mid p {
+  margin: 0;
+}
+
+.route-map {
+  margin: 0;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--color-sand);
+  box-shadow: var(--shadow-float);
+  background: #a9cbd6;
+  line-height: 0;
+}
+.route-map svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.map-label text {
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.92);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  fill: #17221f;
+  font-family: var(--font-body);
+}
+.map-label--airport text {
+  font-size: 13px;
+  font-weight: 600;
+}
+.map-label--airport .map-code {
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  fill: #525d58;
+}
+.map-label--ref text {
+  font-size: 9.5px;
+  fill: #3b4640;
+}
+.map-region {
+  font-family: var(--font-body);
+  pointer-events: none;
+}
+.map-region--state {
+  font-size: 8.5px;
+  letter-spacing: 0.16em;
+  fill: #5d6a4a;
+  fill-opacity: 0.75;
+}
+.map-region--country {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  fill: #6f6352;
+  fill-opacity: 0.8;
+}
+.map-region--sea {
+  font-family: var(--font-heading);
+  font-style: italic;
+  font-size: 13px;
+  fill: #3e6878;
+  fill-opacity: 0.85;
 }
 .time-lg {
   font-size: 2rem;
