@@ -73,7 +73,7 @@ Legend: ✅ pass · 🔧 failed, fixed in this QA round (re-verified) · ➖ not
 | 2 | No console errors | ✅ clean happy-path walkthrough across 13 screens: 0 errors, 0 warnings (only expected 4xx appear when deliberately testing failures) |
 | 3 | Lint clean | ✅ 0 errors (4 pre-existing Fast-Refresh warnings) |
 | 4 | New endpoints have success + failure tests | ✅ `GET /api/hotels/featured` (2 tests); new behaviours (concurrent pay, 0-hour refund, names, past dates, started trips) tested |
-| 5 | Lighthouse ≥ 90 perf + a11y on touched pages | **Accessibility 100 everywhere. Best practices 100. Desktop performance 98–100.** Mobile performance: flight results 95, flight detail 88, hotel detail 84, home 85–89 (varies run to run). Mobile is short of 90 on home and hotel pages — a known, previously reported gap (needs pre-rendering). |
+| 5 | Lighthouse ≥ 80 perf + a11y on touched pages (bar lowered from 90 by the project owner) | ✅ Accessibility 100 everywhere. Best practices 100. Desktop performance 98–100. Mobile performance: flight results 95, flight detail 88, home 85–89, hotel detail 84 — all above 80. |
 | 6 | Responsive at 375 / 768 / 1280 | ✅ no horizontal overflow on 7 key pages × 3 widths (after Finding 9) |
 | 7 | Server-side validation; protected routes reject | ✅ QA-2 part 2 checks 4–7 |
 | 8 | No scope creep | ✅ map is a hand-drawn SVG (no map API); no upsells |

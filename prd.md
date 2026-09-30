@@ -44,7 +44,7 @@ See **Functional** and **Non-Functional Requirements** sections below (kept sepa
 ## Success Metrics
 Since this isn't a commercial launch, success is measured by engineering/UX benchmarks rather than revenue:
 - 100% of MVP user stories (below) demoable end-to-end with no unhandled errors
-- Lighthouse scores ≥ 90 for Performance, Accessibility, and Best Practices on the home, results, and detail pages
+- Lighthouse scores ≥ 80 for Performance, Accessibility, and Best Practices on the home, results, and detail pages (lowered from 90 — an SPA can't reliably hit 90 on Lighthouse's simulated slow phone without pre-rendering)
 - Core Web Vitals on those pages: LCP < 2.5s, CLS < 0.1
 - Zero critical console errors or unhandled promise rejections during a full booking walkthrough
 - Successful public deployment reachable via a single URL
@@ -110,7 +110,7 @@ Full coverage of every MVP feature — `agent.md`'s Definition of Done checks a 
 
 ## Non-Functional Requirements
 - **Security:** password hashing (bcrypt), input validation on all forms, role-based access control for admin routes, secrets kept in environment variables (never committed)
-- **Performance:** Lighthouse ≥ 90 on key pages; paginated or limited result sets to avoid over-fetching
+- **Performance:** Lighthouse ≥ 80 on key pages; paginated or limited result sets to avoid over-fetching
 - **Responsiveness:** usable layouts at phone (~375px), tablet (~768px), and laptop (~1440px) widths
 - **Accessibility:** semantic HTML, sufficient color contrast, visible focus states, keyboard-navigable forms and filters
 - **Reliability:** graceful handling of empty search results and simulated payment failures (no blank screens or unhandled errors)

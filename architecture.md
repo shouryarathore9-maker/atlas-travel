@@ -231,7 +231,7 @@ No live inventory, so realistic seed data matters:
 ```
 
 ## 10. Non-Functional Notes
-Mirrors `prd.md`: responsive breakpoints at ~375px / ~768px / ~1440px, Lighthouse ≥ 90 targets, graceful empty/error states for no-results and failed mock payments.
+Mirrors `prd.md`: responsive breakpoints at ~375px / ~768px / ~1440px, Lighthouse ≥ 80 targets, graceful empty/error states for no-results and failed mock payments.
 
 ## Implementation Deviations (recorded per AGENTS.md)
 Changes made while building the MVP. Each is additive or a clarification; nothing in the original model was removed.
