@@ -72,8 +72,6 @@ const LAND = ['#c9d3a6', '#bccb96', '#d4dbb3', '#b2c28b', '#c3cf9e', '#dde0bb'];
 const NEIGHBOUR = ['#e6dcc4', '#ded2b6', '#ebe3cf', '#d9ccad'];
 const SEA = ['#9fc3cf', '#a9cbd6', '#94bac8', '#b3d2db'];
 
-const inView = ([x, y], margin = 12) => x > margin && x < W - margin && y > margin && y < H - margin;
-
 export default function FlightRouteMap({ origin, destination }) {
   const uid = useId().replace(/:/g, '');
   const a = AIRPORT_COORDS[origin.code];
