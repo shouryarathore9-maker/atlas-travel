@@ -159,6 +159,15 @@ describe('my bookings & cancellation', () => {
     expect(cancelled.booking.cancellation.refundAmount).toBe(paid.booking.fareBreakdown.total - 3500);
   });
 
+  it('refuses to cancel a trip that has already started (story #12)', async () => {
+    const flight = await createFlight();
+    const agent = await loggedInAgent();
+    const { body } = await agent.post('/api/payments/mock').send(flightPayment(flight)).expect(201);
+    await Booking.updateOne({ _id: body.booking._id }, { $set: { 'travelDates.start': new Date(Date.now() - 3600e3) } });
+    const res = await agent.patch(`/api/bookings/${body.booking._id}/cancel`).expect(400);
+    expect(res.body.error.code).toBe('NOT_CANCELLABLE');
+  });
+
   it('computes refund as total minus fee after the free-cancellation cutoff', () => {
     const booking = { fareBreakdown: { total: 7000 }, policySnapshot: { freeUntil: new Date(Date.now() - 1000), feeAfterCutoff: 3500 } };
     expect(computeRefund(booking)).toBe(3500);

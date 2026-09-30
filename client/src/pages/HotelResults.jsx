@@ -143,8 +143,9 @@ export default function HotelResults() {
               {data ? pluralize(data.total, 'stay') : 'Searching stays…'}
             </h1>
             <div className="row">
-              {filters && (
-              <button type="button" className="btn btn-secondary btn-sm filters-toggle" onClick={() => setFiltersOpen(true)}>
+              {/* Shown while loading too (stable layout); hidden only once we know there's nothing to filter */}
+              {(!data || data.unfilteredTotal > 0) && (
+              <button type="button" className="btn btn-secondary btn-sm filters-toggle" disabled={!filters} onClick={() => setFiltersOpen(true)}>
                 <Icon name="filter" size={18} /> Filters
               </button>
               )}

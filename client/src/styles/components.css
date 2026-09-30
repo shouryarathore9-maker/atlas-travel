@@ -169,8 +169,11 @@ legend {
   min-height: 60px;
   transition: border-color var(--ease);
 }
+/* The ring moves to the whole pill (design.md: visible 2px terracotta focus ring, never removed) */
 .pill-field:focus-within {
   border-color: var(--color-primary);
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 .pill-field.invalid {
   border-color: var(--color-error);

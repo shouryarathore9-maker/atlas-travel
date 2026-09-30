@@ -350,6 +350,22 @@
 .summary-bar .small {
   margin: 0;
 }
+/* One line each, so the bar's height can't change when the web font swaps in (prevents layout shift) */
+.summary-bar .spread {
+  flex-wrap: nowrap;
+}
+.summary-bar .spread > div {
+  min-width: 0;
+}
+.summary-bar .summary-route,
+.summary-bar .small {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.summary-bar .btn {
+  flex-shrink: 0;
+}
 .results-layout {
   display: grid;
   gap: var(--space-5);
