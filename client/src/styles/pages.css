@@ -505,6 +505,36 @@
   padding: 0;
   overflow: hidden;
 }
+
+/* Whole-card click target (story #16). The overlay link covers the card; the real CTA sits above it. */
+.clickable-card {
+  position: relative;
+  cursor: pointer;
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+}
+.clickable-card:hover {
+  transform: scale(1.012);
+  box-shadow: var(--shadow-float);
+  border-color: #c9b797;
+}
+.card-overlay-link {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+.clickable-card .card-cta {
+  position: relative;
+  z-index: 2;
+}
+/* Hovering anywhere on the card shows the CTA's own hover state */
+.clickable-card:hover .card-cta.btn-secondary {
+  background: var(--color-sand-soft);
+}
+@media (prefers-reduced-motion: reduce) {
+  .clickable-card:hover {
+    transform: none;
+  }
+}
 .hotel-card-image {
   aspect-ratio: 4 / 3;
 }
@@ -811,6 +841,200 @@
 .gallery-item {
   border-radius: var(--radius-md);
   aspect-ratio: 4 / 3;
+  overflow: hidden;
+  display: block;
+}
+.gallery-photo {
+  width: 100%;
+  height: 100%;
+}
+.gallery-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+}
+
+/* ---------- Similar stays (story #18) & compact stay cards ---------- */
+.similar-stays {
+  border-top: 1px solid var(--color-sand);
+  margin-top: var(--space-6);
+  padding-top: var(--space-7);
+}
+.similar-stays h2 {
+  margin-bottom: var(--space-2);
+}
+.stay-grid {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-5) 0 0;
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+@media (max-width: 559px) {
+  .stay-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+}
+@media (min-width: 1024px) {
+  .stay-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.stay-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-surface);
+  border: 1px solid var(--color-sand);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  color: inherit;
+  text-decoration: none;
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+}
+.stay-card:hover {
+  transform: scale(1.015);
+  box-shadow: var(--shadow-float);
+  border-color: #c9b797;
+}
+.stay-card-image {
+  aspect-ratio: 4 / 3;
+}
+.stay-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-4);
+  flex: 1;
+}
+.stay-card-body p {
+  margin: 0;
+}
+.stay-card-title {
+  font-size: 1.2rem;
+  margin: 0;
+}
+.stay-card-amenities {
+  color: var(--color-muted);
+  margin-top: 4px !important;
+}
+.stay-card-price {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  border-top: 1px solid var(--color-sand-soft);
+  margin-top: auto !important;
+  padding-top: var(--space-3);
+}
+@media (max-width: 559px) {
+  .stay-card-body {
+    padding: var(--space-3);
+  }
+  .stay-card-title {
+    font-size: 1.05rem;
+  }
+  .stay-card-price {
+    flex-direction: column;
+    gap: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stay-card:hover {
+    transform: none;
+  }
+}
+
+/* ---------- Lightbox (story #17) ---------- */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(15, 20, 18, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 16px;
+  animation: fadeIn 150ms ease;
+  touch-action: pan-y;
+}
+.lightbox-photo {
+  max-width: min(100%, 1400px);
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.35);
+  user-select: none;
+  animation: fadeIn 200ms ease;
+}
+/* Translucent but clearly visible controls */
+.lightbox-btn {
+  position: absolute;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(246, 241, 232, 0.72);
+  color: var(--color-text);
+  backdrop-filter: blur(6px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--ease), transform 120ms ease;
+}
+.lightbox-btn:hover {
+  background: rgba(246, 241, 232, 0.9);
+}
+.lightbox-btn:active {
+  transform: scale(0.95);
+}
+.lightbox-btn:focus-visible {
+  outline: 2px solid var(--color-bg);
+  outline-offset: 3px;
+}
+.lightbox-close {
+  top: 16px;
+  right: 16px;
+  width: 46px;
+  height: 46px;
+}
+.lightbox-prev {
+  left: 16px;
+  top: 50%;
+  translate: 0 -50%;
+}
+.lightbox-next {
+  right: 16px;
+  top: 50%;
+  translate: 0 -50%;
+}
+.lightbox-counter {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  translate: -50% 0;
+  margin: 0;
+  color: var(--color-bg);
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  background: rgba(23, 34, 31, 0.55);
+  padding: 4px 14px;
+  border-radius: var(--radius-pill);
+}
+@media (max-width: 600px) {
+  .lightbox-prev,
+  .lightbox-next {
+    top: auto;
+    bottom: 12px;
+    translate: none;
+    width: 46px;
+    height: 46px;
+  }
 }
 .gallery-item-0 {
   grid-column: 1 / -1;

@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import Icon from '../components/Icon.jsx';
+import Lightbox from '../components/Lightbox.jsx';
 import PriceSummary from '../components/PriceSummary.jsx';
 import { RatingBadge, Stars } from '../components/Rating.jsx';
 import Reviews from '../components/Reviews.jsx';
+import SimilarStays from '../components/SimilarStays.jsx';
 import SmartImage from '../components/SmartImage.jsx';
 import { ErrorState, SkeletonList } from '../components/States.jsx';
 import { hotelsApi } from '../api/resources.js';
@@ -48,20 +50,24 @@ export default function HotelDetail() {
       </main>
     );
   }
-  if (!data) {
+  // Also show the skeleton while moving from one hotel to another (e.g. via Similar stays).
+  if (!data || String(data.hotel._id) !== id) {
     return (
       <main id="main" className="container page">
         <SkeletonList count={3} height={200} />
       </main>
     );
   }
-  return <HotelBooking hotel={data.hotel} reviews={data.reviews} stay={readStay(params)} />;
+  // Keyed by hotel so room selection and the photo viewer reset for each hotel.
+  return <HotelBooking key={data.hotel._id} hotel={data.hotel} reviews={data.reviews} stay={readStay(params)} />;
 }
 
 function HotelBooking({ hotel, reviews, stay }) {
   const navigate = useNavigate();
   const nights = nightsBetween(stay.checkIn, stay.checkOut);
   const [selected, setSelected] = useState(null);
+  const [lightboxIndex, setLightboxIndex] = useState(null);
+  const photos = (hotel.photos || []).filter(Boolean);
   const [roomCounts, setRoomCounts] = useState(() => Object.fromEntries(hotel.roomTypes.map((r) => [r.name, stay.rooms])));
 
   const problemFor = (room) => {
@@ -108,18 +114,44 @@ function HotelBooking({ hotel, reviews, stay }) {
       </Link>
 
       <div className="gallery">
-        {[0, 1, 2].map((i) => (
-          <SmartImage
-            key={i}
-            src={hotel.photos?.[i]}
-            alt={i === 0 ? hotel.name : ''}
-            caption={i === 0 ? hotel.name : ''}
-            className={`gallery-item gallery-item-${i}`}
-            eager={i === 0}
-            sizes={i === 0 ? '(min-width: 768px) 66vw, 100vw' : '33vw'}
-          />
-        ))}
+        {[0, 1, 2].map((i) => {
+          const image = (
+            <SmartImage
+              src={photos[i]}
+              alt={i === 0 ? hotel.name : ''}
+              caption={i === 0 ? hotel.name : ''}
+              className="gallery-photo"
+              eager={i === 0}
+              sizes={i === 0 ? '(min-width: 768px) 66vw, 100vw' : '33vw'}
+            />
+          );
+          // Photos open the full-screen viewer (story #17); empty slots stay plain placeholders.
+          return photos[i] ? (
+            <button
+              key={i}
+              type="button"
+              className={`gallery-item gallery-item-${i} gallery-button`}
+              aria-label={`View photo ${i + 1} of ${photos.length} full screen`}
+              onClick={() => setLightboxIndex(i)}
+            >
+              {image}
+            </button>
+          ) : (
+            <div key={i} className={`gallery-item gallery-item-${i}`}>
+              {image}
+            </div>
+          );
+        })}
       </div>
+      {lightboxIndex !== null && (
+        <Lightbox
+          photos={photos}
+          index={lightboxIndex}
+          onIndexChange={setLightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          label={`${hotel.name} photos`}
+        />
+      )}
 
       <header className="detail-header">
         <Stars count={hotel.starRating} />
@@ -241,6 +273,8 @@ function HotelBooking({ hotel, reviews, stay }) {
           }
         />
       </div>
+
+      <SimilarStays hotel={hotel} stay={stay} nights={nights} />
     </main>
   );
 }
