@@ -253,15 +253,16 @@ Plans 1–2 family hotel trips a year. Reads reviews and room details carefully 
 **3. Admin (internal) — Inventory Manager**
 Not a real customer; a stand-in for "whoever demos this project." Needs a simple way to add/edit/remove mock flights and hotels without touching the database directly.
 
-## MVP Prioritization (MoSCoW) & Phases
+## MVP Prioritization & Phases
+Phase 1 is the MVP and is required. Everything in Phases 2 and 3 is optional.
 
-**Phase 1 — Must (MVP)**
+**Phase 1 — MVP (required)**
 Homepage (search tabs, featured destinations, best hotels), flight and hotel search, results + filters/sorting, flight fare + seat + meal selection with route map, hotel room selection with photo viewer and similar stays, reviews & ratings display, traveller/guest details, mock payment (UPI/QR + card), confirmation, auth, My trips (view + cancel), admin CRUD for flights/hotels.
 
-**Phase 2 — Should**
+**Phase 2 — Optional**
 Coupons/offers, wishlists/saved items.
 
-**Phase 3 — Could**
+**Phase 3 — Optional**
 Price alerts, user-submitted reviews (vs. seeded-only), round-trip flights, richer admin analytics/dashboard.
 
 ## Assumptions, Constraints, Risks
@@ -276,7 +277,7 @@ Price alerts, user-submitted reviews (vs. seeded-only), round-trip flights, rich
 ## Decisions & Defaults (previously open questions — resolved so the agent can build without stopping)
 These were flagged as open questions; each now has a default decision so nothing here blocks the agent. Revisit any of them in review if a different call is wanted — they're defaults, not permanent constraints.
 
-1. **User-submitted reviews:** Out of MVP. Reviews are seed-data-only and read-only through Phase 2; user submission is a Phase 3 "could."
+1. **User-submitted reviews:** Out of MVP. Reviews are seed-data-only and read-only through Phase 2; user submission is an optional Phase 3 feature.
 2. **Cancellation refund simulation:** Cancelling a booking calculates a *simulated* refund based on the cancellation policy attached to the booking's fare option (flights) or room type (hotel) at the time of booking — full refund if cancelled before the policy's free-cancellation cutoff, refund minus the stated cancellation fee if after (or always, when the policy has no free window). No real money moves; this is a displayed number only.
 3. **Admin panel structure:** A protected section of the same app (routes under `/admin`, gated by role), not a separate mini-app — simpler to build and deploy for MVP scope.
 4. **Seed flight seat map size:** Standard narrow-body layout, 3-3 economy configuration, rows 1–30 (≈180 seats), a handful marked unavailable per flight for realism.
