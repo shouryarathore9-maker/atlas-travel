@@ -205,9 +205,9 @@ Mirrors a standard Indian checkout page (per project reference screenshots):
 ## 7. Seed Data Plan
 No live inventory, so realistic seed data matters:
 - **Cities:** 8 Tier-1 Indian cities — Delhi, Mumbai, Bengaluru, Hyderabad, Chennai, Kolkata, Pune, Ahmedabad.
-- **Flights:** ~30–40 routes across those city pairs, a handful of airlines (e.g. IndiGo, Air India, Vistara, SpiceJet), each with 2–3 fare options, a 30x6 seat map, and 3–5 meal options.
-- **Hotels:** ~5–8 hotels per city (roughly 40–60 total), each with 2–3 room types, amenities, and photos.
-- **Reviews:** ~5–10 seeded reviews per flight/hotel for realistic ratings.
+- **Flights:** 36 routes (18 city pairs, both directions) with 4 daily departures each from IndiGo, Air India, Vistara and SpiceJet; each flight has Saver and Flexi fares (plus Business on Air India and Vistara), a 30x6 seat map, and 3–5 meal options.
+- **Hotels:** 6 hotels per city (48 total, 3★–5★), each with 2–3 room types, amenities, and three photos.
+- **Reviews:** 0–4 seeded reviews per flight (so some flights show "No reviews yet") and 5–10 per hotel, which set each item's average rating.
 - Seed script lives under `server/seed/` and is idempotent (safe to re-run against a fresh database). It is run from a developer machine against Atlas (`npm run seed`) — never as part of a deployment, because it resets bookings.
 - **Rolling flight window:** flights are dated departures covering the next `SEED_DAYS` (21) days. A daily Vercel Cron job calls `GET /api/cron/extend-flights`, which (a) generates flights for **every** day in the window that has none — so a missed or late run is repaired by the next one — and (b) deletes flights (and their reviews) that departed more than a day ago and have no bookings. It never modifies existing flights, bookings or admin edits. The endpoint only runs when called with `Authorization: Bearer <CRON_SECRET>` (Vercel Cron sends this automatically). Locally the same job runs with `npm run extend-flights`.
 
@@ -245,7 +245,7 @@ vercel.json        (build, routing, cron schedule, function region)
 ```
 
 ## 10. Non-Functional Notes
-Mirrors `prd.md`: responsive breakpoints at ~375px / ~768px / ~1440px, Lighthouse ≥ 80 targets, graceful empty/error states for no-results and failed mock payments.
+Mirrors `prd.md`: responsive breakpoints at ~375px / ~768px / ~1024px (laptop layout, single-row search from ~1280px), Lighthouse ≥ 80 targets, graceful empty/error states for no-results, past dates, sold-out seats/rooms and failed mock payments.
 
 ## Implementation Deviations (recorded per AGENTS.md)
 Changes made while building the MVP. Each is additive or a clarification; nothing in the original model was removed.

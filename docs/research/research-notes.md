@@ -1,0 +1,19 @@
+# Atlas — Research notes
+
+Competitor screens and concept references gathered before the PRD was written. Source: the project owner's research document (*Travel Booking — prompt and research*), plus the homepage concept mockup. Screenshots are kept here for reference only; Atlas deliberately leaves out the upsells and offer clutter they show (see `prd.md` → Problem and Out of Scope).
+
+| File | What it shows | What Atlas took from it | What Atlas deliberately left out |
+|---|---|---|---|
+| [01-makemytrip-home-search.webp](01-makemytrip-home-search.webp) | MakeMyTrip home: vertical tabs (Flights first), one-way search bar with From ⇄ To, departure date, travellers, cabin class | Flights/Hotels tabs with Flights as default; From ⇄ To with a swap control; departure date, travellers and cabin fields | Return/multi-city trips, special fares (student, armed forces…), "Price Drop Protection", 12 other verticals |
+| [02-makemytrip-home-offers.webp](02-makemytrip-home-offers.webp) | Offers carousel on the home page | "View all" pattern for a homepage section | Coupons and bank offers (Phase 2) |
+| [03-makemytrip-flight-results.webp](03-makemytrip-flight-results.webp) | Flight results: date strip, filter sidebar, sort tabs (Cheapest, Non-stop first…), result cards with airline, flight number, times, duration, stops, price, "View prices" | Card contents (airline, flight number, times, duration, stops, price per traveller, one CTA); filters for stops, airline, departure time, price; sort options | Coupon banners, "Lock this price", AI smart filters, date price strip |
+| [04-makemytrip-flight-fare-options.webp](04-makemytrip-flight-fare-options.webp) | Fare options for one flight (Saver / special / Flexi Plus) with baggage, cancellation and date-change terms | Fare tier cards showing price per traveller, cabin/check-in baggage, cancellation fee and date-change terms | Add-ons and "Benefits worth ₹…" bundles, price-drop protection |
+| [05-hotel-details-ux-case-study.webp](05-hotel-details-ux-case-study.webp) | A hotel-details UX case study: anatomy of the page (gallery, star rating, ratings + review count, amenities, travel dates/guests, about, reviews, compare similar hotels, sticky price + "Select room") | Page anatomy: photo gallery, name + stars, rating + review count, amenities, stay dates/guests, room selection, reviews, **similar hotels for comparison**, price summary with a single CTA | Safety/Covid sections, location map and nearby places, traveller photo uploads |
+| [06-atlas-homepage-concept-mockup.webp](06-atlas-homepage-concept-mockup.webp) | Atlas homepage concept (editorial, ivory/terracotta, coastal hero) | Visual direction for the homepage — see `design.md` → Brand Direction | Brand name "Voyage" (the product is Atlas); nav items without a PRD feature ("Experiences", "About"); the style-guide panels |
+
+## Main flow captured from the competitor screens
+Search → Results (filter / sort) → Select (fare + seat + meal, or room) → Traveller / guest details → Review → Pay → Confirmation. Secondary flows: sign up / log in, view past bookings, cancel a booking.
+
+## Data fields seen on the screens
+- **Flights:** airline, flight number, aircraft, origin/destination airports and cities, departure/arrival times, duration, stops, fare tiers with baggage and cancellation/date-change terms, seats, meals.
+- **Hotels:** name, star rating, location, guest rating and review count, amenities, photos, room types (occupancy, bed, price, taxes, cancellation terms), availability.

@@ -4,6 +4,7 @@ A calm, editorial flight + hotel booking app for India, built on MERN as a learn
 Everything — inventory, reviews and payments — is seeded or simulated. No third-party APIs.
 
 - Product: [prd.md](prd.md) · System design: [architecture.md](architecture.md) · UI: [design.md](design.md) · How to work: [AGENTS.md](AGENTS.md)
+- Research: [docs/research/research-notes.md](docs/research/research-notes.md) (competitor screens and the homepage concept) · QA: [docs/QA-REPORT.md](docs/QA-REPORT.md)
 
 ## Stack
 React 19 + Vite + React Router · Node + Express 5 · MongoDB (Mongoose) · JWT in an httpOnly cookie · Vitest, React Testing Library, Supertest · Hosted on Vercel with MongoDB Atlas
