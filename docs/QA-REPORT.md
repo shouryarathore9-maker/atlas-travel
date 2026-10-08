@@ -131,7 +131,7 @@ QA used two local test accounts (`qa-alice@atlas.test`, `qa-bob@atlas.test`) and
 # Phase 2 QA (8 Oct 2026)
 
 Scope: Phase 2 stages 1–8 plus the owner's extra requests (supplier suspension, pricing limits, offer artwork, hotel photo uploads, bell chime).
-Evidence: server suite **130 tests / 15 files** (Supertest on an in-memory MongoDB), client suite **29 tests**, lint 0 errors, browser walkthroughs on the dev server at ~375 / ~800 / 1280 px, an adversarial code review of the riskiest code (sandbox isolation, authorisation, money, crashes), and a storage measurement.
+Evidence: server suite **129 tests / 15 files** (Supertest on an in-memory MongoDB), client suite **29 tests**, lint 0 errors, browser walkthroughs on the dev server at ~375 / ~800 / 1280 px, an adversarial code review of the riskiest code (sandbox isolation, authorisation, money, crashes), and a storage measurement.
 
 ## Adversarial review — findings and fixes
 
