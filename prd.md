@@ -331,6 +331,13 @@ Prices are never stored per flight or per room and never hand-entered. One pure 
 
 **No occupancy factor for hotels:** hotel prices don't depend on how full the property is. Only flights have a demand factor.
 
+**What a manager can change on the rate card** (fixed rule set; no custom rules):
+- **Values:** every number in every rule (rates, growth, multipliers, fees, guard rails), and whether each base-rate variable is *growing* or *manual*.
+- **On/off per rule:** time of day, day of week, days to departure, demand, season or event, route overrides (airline); day of week, season or event, lead time (hotel). A switched-off rule counts as ×1.0 and keeps its entries for when it's switched back on. The base rate, fare tiers / rate plans and guard rails are always on.
+- **Add and remove entries in list-type rules:** season or event ranges, route overrides, demand bands, time-of-day bands and days-to-departure bands (airline); season ranges and lead-time bands (hotel).
+- **Validation on save:** multipliers 0.5–3.0; rates and fees positive; banded rules must cover their whole range with no gaps or overlaps (time of day 00:00–23:59, days to departure 0–60, demand 0–100%, lead time 0–60 days); season ranges can't overlap and must have an end after their start; at most 10 bands per rule, 30 seasons and 50 route overrides; the floor must be below the ceiling. Every save is audit-logged with before and after.
+- **Not possible:** inventing new rule types or metrics (a custom rule builder is out of scope).
+
 **Real-world patterns behind the defaults:** domestic fares bottom out when booked 21+ days ahead, rise gradually until about day 7, then climb steeply; weekends cost more than weekdays except in festival weeks, when every day is uniformly higher; different airlines' fares on the same route move together.
 
 ## Cancellation Templates
@@ -439,7 +446,7 @@ Full coverage of every feature — `AGENTS.md`'s Definition of Done checks a fea
 | 31 | As an airline manager, I want to manage my services and departures, so my schedule is right. | I can add, edit and discontinue services for my airline only (another airline's ids return 404); departures appear for 60 days; Stop/Resume sales hides/shows a departure in search; editing a service changes only un-booked departures; I can't delete a service with bookings. Every change is in the audit log. |
 | 32 | As an airline manager, I want to cancel or reschedule a departure, so travellers are looked after automatically. | Cancel shows the bookings affected and total refunds, then refunds every booking in full with notifications (Workflow 6). Reschedule shows the bookings affected, then updates times and notifies travellers (Workflow 7). Each action creates one audit entry with the count. |
 | 33 | As a hotel manager, I want to manage my hotel and rooms, so travellers see accurate details. | I can edit my hotel's description, amenities, photos (from the gallery only) and room types, and stop/resume sales; another hotel's ids return 404; a room type with bookings can't be deleted or renamed. |
-| 34 | As a manager, I want to set my prices through a rate card, so prices follow rules instead of guesswork. | The rate card editor validates every input (multipliers 0.5–3.0, positive rates, non-overlapping season ranges); the price preview matches what search then shows; saving changes search prices immediately and never changes existing bookings. |
+| 34 | As a manager, I want to set my prices through a rate card, so prices follow rules instead of guesswork. | I can edit every value, switch each optional rule on or off (off = ×1.0, entries kept), and add or remove seasons, route overrides and bands; the editor rejects gaps, overlaps, out-of-range multipliers and too many entries with a message on the offending row; the price preview matches what search then shows; saving changes search prices immediately and never changes existing bookings; I can't add new rule types. |
 | 35 | As a manager, I want to see my reservations and passenger lists, so I can serve travellers. | My departures/reservations list my bookings only, with names, seats, meals, special requests, offer and funder; I'm notified of new bookings and traveller cancellations. |
 | 36 | As a manager, I want to create offers for my own airline or hotel, so I can fill seats or rooms. | I can create percent (with cap) or flat offers, code or automatic, with minimum spend, booking-date validity, redemption limit and first-3 flag, for my items only; pause/resume them; see redemptions and discount cost; I can't see or edit other suppliers' or platform offers. |
 | 37 | As a manager, I want monthly settlement statements, so I know what Atlas owes me. | A frozen statement per month lists gross, discount by funder, refunds, commission and net with the commission rate; I can query a line with a note; resolutions appear as adjustments on the next statement; I'm notified when a statement is ready, a query is answered, and it's paid. |
@@ -500,6 +507,7 @@ Since this isn't a commercial launch, success is measured by engineering/UX benc
 - Supplier onboarding and verification; staff sub-roles (e.g. hotel front desk); password change and account settings for any role
 - Manual or goodwill refunds; modifying a booking after creation; no-show handling
 - User suspension and listing or review moderation (pausing an offer is not moderation)
+- A custom pricing-rule builder (new rule types or metrics on the rate card)
 - Occupancy-based hotel pricing; date-aware hotel availability (rooms are a simple counter returned after check-out)
 - Gate-scan screens, hotel check-in screens and any checked-in or boarded booking status (web check-in and boarding passes are in scope)
 - Settlement: virtual cards, payment methods, GST and TCS lines, chargebacks, credit-note documents
@@ -586,6 +594,7 @@ These were flagged as open questions; each now has a default decision so nothing
 21. **Two automatic offers:** the bigger discount applies (tie: platform-funded).
 22. **Retained cancellation fee:** settles in the month of cancellation.
 23. **Infant fee:** ₹1,500 per infant per flight.
+24. **Rate card editing:** a fixed rule set; managers edit values, switch optional rules on/off (off = ×1.0) and add/remove entries in list-type rules, all validated. No custom rule builder.
 
 **Phase 2 assumptions from the spec, confirmed as written:** funding and commission rules (Settlement); no convenience fee exists — confirmed in code (flight taxes are 12% of the base fare; hotel taxes are seeded per room per night; neither includes an Atlas charge), so the label becomes "Taxes"; tax recomputed on the discounted base; redemption restored only on supplier cancellation; a typed code replaces an automatic offer; validity dates are booking dates; first-3-bookings excludes supplier-cancelled bookings; no offer badges in results; the admin kill switch is not moderation; build order platform offers first, then supplier offers and the funding split; Saturday ×1.05; commission 10%; special requests visible to admin read-only and supplier replies audit-logged; take rate on completed bookings; sandbox hotels from the best-hotels set; sandbox admin actions affect only the sandbox.
 

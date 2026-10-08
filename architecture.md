@@ -420,6 +420,8 @@ settlement: null → { statementId } (once; never changes)
 ## 12. Pricing Engine (pure functions in `server/services/pricing.js`)
 All inputs come from the supplier's rate card; no I/O. Results are whole rupees.
 
+**Rate card shape:** each optional rule is `{ enabled, ... }`; a disabled rule's factor is 1.0 (its entries are kept). Banded rules are arrays of `{ from, to, x }` validated by zod to be sorted, contiguous and covering their whole domain; `seasons: [{ name, from, to, x }]` non-overlapping (≤ 30); `routeOverrides: [{ origin, destination, multiplier | fixedBase }]` (≤ 50); ≤ 10 bands per rule. Base rate, tiers/rate plans and guard rails have no `enabled` flag. The rate card has a `version` incremented on each save (audit-logged with before/after). The rule set is fixed in code — managers can't add rule types.
+
 **Variables:** `value(v, on) = v.mode === 'manual' ? v.value : v.value × (1 + v.growthPctPerYear/100) ^ (yearsSince(v.since, on))`.
 
 **Flight fare (per adult/child):**
