@@ -37,6 +37,7 @@ import {
 } from './generate.js';
 import { generateHistory, HISTORY_EMAIL_DOMAIN, seedSettlementHistory } from './history.js';
 import { generateOffers } from './offers.js';
+import { topUpSuppliers } from './top-up.js';
 import { closeStatements, istPeriod, periodLabel, periodStart, shiftPeriod } from '../services/settlement.js';
 import { DEFAULT_TEMPLATES } from '../services/templates.js';
 
@@ -177,11 +178,13 @@ async function main() {
     if (offer.status !== 'exhausted') await Offer.updateOne({ _id: offerId }, { $inc: { redemptions: used } });
   }
   const settlement = await seedSettlementHistory({ Statement, Ticket, Adjustment, closeStatements, istPeriod, periodStart, shiftPeriod, periodLabel });
+  const topUp = await topUpSuppliers(); // every account gets upcoming trips, requests and an offer
 
   console.log(
     `Seeded ${airlineSuppliers.length + hotelSuppliers.length} suppliers, ${services.length} services, ` +
       `${flights.length} departures (${SEED_DAYS} days), ${hotels.length} hotels, ${reviews.length} reviews, ${offers.length} offers.`,
   );
+  console.log(`Top-up: ${JSON.stringify(topUp)}`);
   console.log(`History: ${history.bookings.length} synthetic bookings (${history.bookings.filter((b) => b.travelDates.start > new Date()).length} still upcoming), ${history.payments.length} payments, ${settlement.statements} statements over ${settlement.periods} months.`);
   console.log(`Accounts: ${DEMO_USERS.map((u) => `${u.email} (${u.role})`).join(', ')} — passwords are the SEED_* values in server/.env`);
   console.log(`${managers.length} manager accounts — passwords in server/manager-credentials.local.md (git-ignored)`);

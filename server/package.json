@@ -9,6 +9,7 @@
     "start": "node index.js",
     "seed": "node seed/index.js",
     "daily": "node seed/daily.js",
+    "top-up": "node seed/top-up.js",
     "test": "vitest run",
     "lint": "eslint ."
   },

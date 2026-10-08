@@ -62,9 +62,10 @@ export function generateHistory({
   futureDays = FUTURE_DAYS,
   rate = 1,
   users: givenUsers = null,
+  seatsTaken = null, // Map: departure id → Set of seats already held by earlier synthetic bookings
 }) {
   const departureOf = new Map(flights.map((f) => [`${f.serviceId}|${f.date}`, f]));
-  const seatsUsed = new Map(); // departure id → seats given to synthetic bookings
+  const seatsUsed = new Map(seatsTaken || []); // departure id → seats given to synthetic bookings
   const roomsTaken = new Map(); // `${hotelId}|${room}` → rooms taken by upcoming synthetic stays
   const roomChanges = [];
   const supplierById = Object.fromEntries([...airlineSuppliers, ...hotelSuppliers].map((s) => [String(s._id), s]));
