@@ -415,6 +415,8 @@ legend {
   background: var(--color-surface);
   width: 100%;
   max-height: 88vh;
+  max-height: 88dvh; /* follows Chrome's/Safari's sliding address bar */
+  padding-bottom: env(safe-area-inset-bottom);
   overflow: auto;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   box-shadow: var(--shadow-float);
@@ -580,8 +582,82 @@ legend {
   .hide-phone {
     display: none;
   }
+}
+
+/* Header right side: bell + account links (laptop) or bell + menu button (phone). */
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.nav-menu-btn {
+  display: none;
+}
+.nav-menu,
+.nav-menu-scrim {
+  display: none;
+}
+@media (max-width: 767px) {
+  .nav-inner {
+    min-height: 56px;
+  }
+  .logo {
+    font-size: 1.55rem;
+  }
   .nav-links {
-    gap: var(--space-1);
+    display: none;
+  }
+  .nav-menu-btn {
+    display: inline-flex;
+    width: 44px;
+    height: 44px;
+  }
+  .nav-menu {
+    display: block;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    background: var(--color-bg);
+    border-bottom: 1px solid var(--color-sand);
+    box-shadow: var(--shadow-float);
+    max-height: calc(100dvh - 56px);
+    overflow-y: auto;
+  }
+  .nav-menu-inner {
+    display: flex;
+    flex-direction: column;
+    padding-top: var(--space-2);
+    padding-bottom: var(--space-4);
+  }
+  .nav-menu .nav-link {
+    display: flex;
+    align-items: center;
+    min-height: 48px;
+    padding: 0 4px;
+    font-size: 1.05rem;
+  }
+  .nav-menu-rule {
+    border: 0;
+    border-top: 1px solid var(--color-sand);
+    width: 100%;
+    margin: var(--space-2) 0;
+  }
+  .nav-menu-account {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    min-height: 48px;
+  }
+  .nav-menu-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 19;
+    border: 0;
+    padding: 0;
+    background: rgba(23, 34, 31, 0.25);
   }
 }
 .badge-error {

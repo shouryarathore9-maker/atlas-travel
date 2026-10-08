@@ -24,6 +24,7 @@ const PATHS = {
   list: <><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01" /></>,
   building: <><rect x="5" y="3.5" width="14" height="17" rx="1.5" /><path d="M9 8h2M13 8h2M9 12h2M13 12h2M10.5 20.5v-4h3v4" /></>,
   star: <><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9L12 3.5Z" /></>,
+  menu: <><path d="M4 7h16M4 12h16M4 17h16" /></>,
 };
 
 export default function Icon({ name, size = 20, title, ...rest }) {

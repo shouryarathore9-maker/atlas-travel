@@ -68,7 +68,8 @@ A feature is **done** only when all of the following are objectively true — no
 3. **Lint clean:** `npm run lint` passes with zero errors on changed files.
 4. **Automated coverage:** any new API endpoint has at least one passing Vitest+Supertest test covering its success path and its main failure path (e.g. invalid input, unauthorized access).
 5. **Performance:** Lighthouse Performance and Accessibility scores stay ≥ 80 on any page that was touched (checked manually via Chrome DevTools or the Lighthouse CLI — not wired into CI for MVP).
-6. **Responsive check:** the feature is manually verified at three widths — ~375px, ~768px, ~1280px — with no overlapping/clipped content.
+6. **Responsive check:** the feature is manually verified at three widths — ~375px, ~768px, ~1280px — with no overlapping/clipped content, and no page wider than the screen at 375px (`document.documentElement.scrollWidth` equals the viewport width).
+6a. **Phone usability (design.md → Phone layouts):** the phone layout follows its section (not just "stacked"); controls are ≥ 44px tall on touch screens and form text is ≥ 16px; at most one fixed bar (≤ ~100px); nothing scrolls vertically inside the page; on the homepage the search button is visible on a 375×812 screen without scrolling. Taps to search from the homepage: ≤ 3 (pick cities/dates if needed, then Search); taps from a result to the payment step on a flight: View fares → Continue → (traveller details) Continue to review → Payment. The owner checks new screens on a real phone before release.
 7. **Security basics:** any new form validates input server-side (not just client-side); any new route that should be protected actually rejects unauthenticated/unauthorized requests (verified with a manual or automated request, e.g. via curl/Postman/Supertest).
 8. **No scope creep:** the change doesn't introduce anything from the "What Not To Do" or `prd.md`'s "Out of Scope" list.
 

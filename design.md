@@ -62,11 +62,30 @@
 ## Responsive Rules
 | Breakpoint | Width | Notes |
 |---|---|---|
-| Phone | ~375–767px | Single-column results; destinations, best hotels and similar stays in 2-column grids; filters move into a bottom-sheet modal; search fields stack vertically; portrait hero photo above the headline; price summary becomes a bottom bar. |
+| Phone | ~375–767px | See **Phone layouts** below — a designed layout per screen, not "the laptop layout stacked". |
 | Tablet | ~768–1023px | 4-column destinations and best-hotels grids; search fields in three columns; filters open in a centred dialog; price summary still a bottom bar. |
 | Laptop | ~1024px+ | Full layout as in the concept mockup: sidebar filters + result list side by side, two-column detail pages with a sticky price summary; from ~1280px the search fields fit on one row. |
 
 Since most OTA traffic is mobile, design and test the phone layout first for every new screen, not as an afterthought.
+
+## Phone layouts (≤ 767px)
+Phone screens show the **same content** as laptop (no extra or reworded text) arranged for one thumb and a short screen. Reference: Booking.com and Airbnb phone apps for density; Atlas keeps its own type, colours and calm tone.
+
+**Global rules**
+- **Header (56px):** logo, the notification bell (signed in) and a **menu** button. The menu opens a panel under the header with every header link — Destinations, Offers, Stays, the role links (My trips, Saved travellers / Supplier console / Admin console), the greeting with Sign out (or Leave demo), or Sign in. Nothing that exists on laptop is unreachable on a phone. The notifications panel opens full-width under the header.
+- **Fixed layers budget:** at most one fixed bar at a time, the bottom price/CTA bar on detail pages, ≤ ~100px including the home-indicator area (`env(safe-area-inset-bottom)`): one row — total (and its one-line terms, clamped to two lines) on the left, the single CTA on the right. The header and results summary bar scroll away. Bottom sheets (filters, travellers, dialogs) use `dvh` so Chrome's and Safari's sliding address bars never hide their buttons.
+- **Touch:** every control ≥ 44×44px on touch screens (buttons, chips, icon buttons, text buttons, seats); form controls use 16px text (smaller makes iPhones zoom in); hover effects only apply on devices that hover (`@media (hover: hover)`), and cards show a pressed state on tap.
+- **Spacing:** the same scale one step tighter — sections 48px apart instead of 64px, card padding 12–14px instead of 16–24px.
+- **Swipeable rows:** collections that are grids on laptop — featured destinations, Best hotels, Offers available today (homepage), Similar stays, guest reviews — become a single horizontal row that snaps card by card, with the next card peeking in (cards ~72% wide, destinations ~44%, reviews ~82% as bordered cards). The full Offers page stays a list.
+- **Images:** seeded hotel and offer photos also exist at 480px (`name-480.jpg`) and are offered through `srcset` so small cards and phones download the small file; the hero has its own phone image.
+- **No scroll traps:** nothing scrolls inside the page vertically on phones (the seat map shows in full); wide tables scroll sideways inside their card, never the page.
+
+**Key screens**
+- **Home:** search first. The hero photo is a 260px band; the eyebrow and headline overlap its faded lower edge; the search card starts within the first screen and its button is visible without scrolling on a 375×812 phone. Flights: From | swap | To on one row, Departure | Travellers on the next, Cabin, then Search. Hotels: Destination, Check-in | Check-out, Guests, Search. Field icons are hidden; labels stay. Travellers open as a bottom sheet. Native date and city pickers are used (they already open full-screen on phones).
+- **Flight results:** filters and sort in one row under the summary; each flight card is ~200px — airline, flight number and rating on the left, price, "per traveller" and View fares on the right, the time line underneath.
+- **Hotel results:** horizontal cards — a 112px photo on the left, stars, name, address, rating, amenities (two lines) and badges on the right; under both, the price lines on the left and See rooms on the right.
+- **Flight / hotel detail:** content in one column, the compact bottom bar above; the seat map uses 36px seats and no inner scroll; reviews are a swipeable row.
+- **Consoles and analytics:** laptop-first by design (prd.md), but usable on phones: section tabs scroll sideways, tables scroll inside their cards, the analytics filters open in a dialog, and no page is wider than the screen.
 
 ## Accessibility
 - Minimum 4.5:1 contrast for body text (deep ink on ivory comfortably passes; use white/ivory text on terracotta buttons, not terracotta-on-ivory text, to keep contrast safe).

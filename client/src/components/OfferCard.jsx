@@ -9,7 +9,7 @@ export const SCOPE_LABEL = { flights: 'Flights', hotels: 'Hotels', both: 'Flight
 export default function OfferCard({ offer }) {
   return (
     <Link to={`/offers/${offer.slug}`} className="offer-card">
-      <SmartImage src={offer.image} alt="" caption={offer.title} className="offer-card-image" sizes="(min-width: 1024px) 300px, 50vw" />
+      <SmartImage src={offer.image} alt="" caption={offer.title} className="offer-card-image" sizes="(min-width: 1024px) 300px, (min-width: 768px) 50vw, 72vw" />
       <div className="offer-card-body">
         <p className="eyebrow">{SCOPE_LABEL[offer.scope]}</p>
         <h3 className="offer-card-title">{offer.title}</h3>

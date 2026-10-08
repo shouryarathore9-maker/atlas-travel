@@ -16,7 +16,7 @@ export default function HotelCard({ hotel, stayQuery }) {
         alt={`${hotel.name}`}
         caption={hotel.name}
         className="hotel-card-image"
-        sizes="(min-width: 768px) 260px, 100vw"
+        sizes="(min-width: 768px) 260px, 112px"
       />
       <div className="hotel-card-body">
         <div>

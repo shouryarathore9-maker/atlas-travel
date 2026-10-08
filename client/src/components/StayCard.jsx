@@ -8,7 +8,7 @@ export default function StayCard({ hotel, href, price, priceLabel = 'per night' 
   const area = hotel.address?.split(',')[0] || hotel.city;
   return (
     <Link to={href} className="stay-card">
-      <SmartImage src={hotel.photo} alt="" caption={hotel.name} className="stay-card-image" sizes="(min-width: 1024px) 300px, 50vw" />
+      <SmartImage src={hotel.photo} alt="" caption={hotel.name} className="stay-card-image" sizes="(min-width: 1024px) 300px, (min-width: 768px) 50vw, 72vw" />
       <div className="stay-card-body">
         <Stars count={hotel.starRating} />
         <h3 className="stay-card-title">{hotel.name}</h3>
