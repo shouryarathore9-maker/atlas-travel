@@ -30,17 +30,11 @@ function readStay(params) {
   };
 }
 
-function cancellationText(policy, price) {
-  if (policy.freeUntilDaysBeforeCheckIn > 0) {
-    return `Free cancellation until ${pluralize(policy.freeUntilDaysBeforeCheckIn, 'day')} before check-in; after that, ${formatPrice(policy.feeAfterCutoff)} fee.`;
-  }
-  return `Non-refundable window: ${formatPrice(policy.feeAfterCutoff ?? price)} fee on cancellation.`;
-}
-
 export default function HotelDetail() {
   const { id } = useParams();
   const [params] = useSearchParams();
-  const { data, error, reload } = useAsync((signal) => hotelsApi.get(id, { signal }), [id]);
+  const stay = readStay(params);
+  const { data, error, reload } = useAsync((signal) => hotelsApi.get(id, { checkIn: stay.checkIn, checkOut: stay.checkOut }, { signal }), [id, stay.checkIn, stay.checkOut]);
   useDocumentTitle(data?.hotel?.name || 'Hotel');
 
   if (error) {
@@ -51,7 +45,7 @@ export default function HotelDetail() {
     );
   }
   // Also show the skeleton while moving from one hotel to another (e.g. via Similar stays).
-  if (!data || String(data.hotel._id) !== id) {
+  if (!data || String(data.hotel._id) !== id || data.stay.checkIn !== stay.checkIn || data.stay.checkOut !== stay.checkOut) {
     return (
       <main id="main" className="container page">
         <SkeletonList count={3} height={200} />
@@ -59,19 +53,23 @@ export default function HotelDetail() {
     );
   }
   // Keyed by hotel so room selection and the photo viewer reset for each hotel.
-  return <HotelBooking key={data.hotel._id} hotel={data.hotel} reviews={data.reviews} stay={readStay(params)} />;
+  return <HotelBooking key={`${data.hotel._id}-${stay.checkIn}-${stay.checkOut}`} data={data} stay={stay} />;
 }
 
-function HotelBooking({ hotel, reviews, stay }) {
+function HotelBooking({ data, stay }) {
+  const { hotel, reviews, breakfastPerGuest, supplierCancellation } = data;
   const navigate = useNavigate();
   const nights = nightsBetween(stay.checkIn, stay.checkOut);
-  const [selected, setSelected] = useState(null);
+  const guests = stay.adults + stay.children;
+  const [selected, setSelected] = useState(null); // { room, plan }
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const photos = (hotel.photos || []).filter(Boolean);
   const [roomCounts, setRoomCounts] = useState(() => Object.fromEntries(hotel.roomTypes.map((r) => [r.name, stay.rooms])));
+  const [breakfast, setBreakfast] = useState({});
 
   const problemFor = (room) => {
     const rooms = roomCounts[room.name];
+    if (room.salesStopped) return 'Not available to book right now.';
     if (room.roomsAvailable === 0) return 'Fully booked for now.';
     if (rooms > room.roomsAvailable) return `Only ${pluralize(room.roomsAvailable, 'room')} of this type left.`;
     if (!roomFits(room, { adults: stay.adults, children: stay.children, rooms })) {
@@ -80,10 +78,12 @@ function HotelBooking({ hotel, reviews, stay }) {
     return null;
   };
 
-  const room = hotel.roomTypes.find((r) => r.name === selected);
+  const room = hotel.roomTypes.find((r) => r.name === selected?.room);
+  const plan = room?.plans.find((p) => p.key === selected?.plan);
   const rooms = room ? roomCounts[room.name] : stay.rooms;
   const blocked = room ? problemFor(room) : null;
-  const breakdown = room && !blocked ? hotelBreakdown(room, rooms, nights) : null;
+  const withBreakfast = Boolean(room && breakfast[room.name]);
+  const breakdown = room && plan && !blocked ? hotelBreakdown({ plan, room, rooms, nights, breakfast: withBreakfast, breakfastPerGuest, guests }) : null;
   const stayQuery = new URLSearchParams({ ...stay, city: hotel.city }).toString();
 
   function reserve() {
@@ -91,6 +91,8 @@ function HotelBooking({ hotel, reviews, stay }) {
       type: 'hotel',
       itemId: hotel._id,
       roomTypeName: room.name,
+      ratePlan: plan.key,
+      breakfast: withBreakfast,
       rooms,
       checkIn: stay.checkIn,
       checkOut: stay.checkOut,
@@ -98,10 +100,10 @@ function HotelBooking({ hotel, reviews, stay }) {
       children: stay.children,
       display: {
         title: hotel.name,
-        subtitle: `${room.name} · ${pluralize(rooms, 'room')} · ${pluralize(nights, 'night')}`,
+        subtitle: `${room.name} · ${plan.name} · ${pluralize(rooms, 'room')} · ${pluralize(nights, 'night')}`,
         when: `${formatDateString(stay.checkIn)} – ${formatDateString(stay.checkOut)}`,
-        breakdown,
-        policy: cancellationText(room.cancellationPolicy, room.price),
+        policy: plan.terms,
+        estimate: breakdown.total,
       },
     });
     navigate('/checkout');
@@ -185,16 +187,13 @@ function HotelBooking({ hotel, reviews, stay }) {
 
           <section className="detail-section" aria-labelledby="rooms-heading">
             <h2 id="rooms-heading">Choose your room</h2>
-            <p className="small muted">
-              Prices for {pluralize(nights, 'night')}; taxes shown separately.
-            </p>
+            <p className="small muted">Average price per room per night for your {pluralize(nights, 'night')}; taxes shown separately.</p>
             <div className="room-list">
               {hotel.roomTypes.map((r) => {
                 const problem = problemFor(r);
-                const isSelected = selected === r.name;
                 const maxRooms = Math.max(1, Math.min(8, r.roomsAvailable + 2));
                 return (
-                  <article key={r.name} className={`room-card ${isSelected ? 'is-selected' : ''}`}>
+                  <article key={r.name} className={`room-card ${selected?.room === r.name ? 'is-selected' : ''}`}>
                     <div className="room-card-main">
                       <h3>{r.name}</h3>
                       <p className="small">
@@ -204,14 +203,14 @@ function HotelBooking({ hotel, reviews, stay }) {
                       <p className="small muted">{r.amenities.join(' · ')}</p>
                       <div className="row">
                         {r.breakfastIncluded ? <span className="badge badge-olive">Breakfast included</span> : <span className="badge badge-muted">Room only</span>}
-                        {r.cancellationPolicy.freeUntilDaysBeforeCheckIn > 0 && <span className="badge badge-success">Free cancellation</span>}
                       </div>
-                      <p className="small">{cancellationText(r.cancellationPolicy, r.price)}</p>
-                    </div>
-                    <div className="room-card-side">
-                      <p className="price">{formatPrice(r.price)}</p>
-                      <p className="small muted">per room / night + {formatPrice(r.taxesAndFees)} taxes</p>
-                      <div className="field">
+                      {!r.breakfastIncluded && breakfastPerGuest > 0 && (
+                        <label className="checkbox small">
+                          <input type="checkbox" checked={Boolean(breakfast[r.name])} onChange={(e) => setBreakfast((b) => ({ ...b, [r.name]: e.target.checked }))} /> Add breakfast (
+                          {formatPrice(breakfastPerGuest)} per guest per night)
+                        </label>
+                      )}
+                      <div className="field room-count">
                         <label htmlFor={`rooms-${r.name}`} className="small">
                           Rooms
                         </label>
@@ -235,20 +234,45 @@ function HotelBooking({ hotel, reviews, stay }) {
                           {problem}
                         </p>
                       )}
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        aria-pressed={isSelected}
-                        disabled={r.roomsAvailable === 0}
-                        onClick={() => setSelected(isSelected ? null : r.name)}
-                      >
-                        {isSelected ? 'Selected' : 'Select'}
-                      </button>
+                    </div>
+                    <div className="rate-plans">
+                      {r.plans.map((p) => {
+                        const isSelected = selected?.room === r.name && selected?.plan === p.key;
+                        return (
+                          <div key={p.key} className={`rate-plan ${isSelected ? 'is-selected' : ''}`}>
+                            <div className="rate-plan-terms">
+                              <p className="rate-plan-name">
+                                {p.name} {p.freeCancellation && <span className="badge badge-success">Free cancellation</span>}
+                              </p>
+                              <p className="small muted">{p.terms}</p>
+                            </div>
+                            <div className="rate-plan-price">
+                              <p className="price">{formatPrice(p.avgNightly)}</p>
+                              <p className="small muted">
+                                avg per night + {formatPrice(r.taxesAndFees)} taxes · {formatPrice(p.perRoom)} per room for the stay
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              aria-pressed={isSelected}
+                              aria-label={`${isSelected ? 'Selected' : 'Select'} ${r.name}, ${p.name}`}
+                              disabled={r.roomsAvailable === 0 || r.salesStopped}
+                              onClick={() => setSelected(isSelected ? null : { room: r.name, plan: p.key })}
+                            >
+                              {isSelected ? 'Selected' : 'Select'}
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   </article>
                 );
               })}
             </div>
+            <p className="supplier-promise small">
+              <strong>If the hotel cancels.</strong> {supplierCancellation}
+            </p>
           </section>
 
           <Reviews itemType="hotel" itemId={hotel._id} rating={hotel.rating} initialReviews={reviews} />
@@ -259,13 +283,33 @@ function HotelBooking({ hotel, reviews, stay }) {
           lines={
             breakdown
               ? [
-                  { label: `${formatPrice(room.price)} × ${pluralize(rooms, 'room')} × ${pluralize(nights, 'night')}`, amount: breakdown.base },
-                  { label: 'Taxes & fees', amount: breakdown.taxes },
+                  { label: `Room charges (${pluralize(rooms, 'room')} × ${pluralize(nights, 'night')})`, amount: breakdown.base },
+                  breakdown.breakfast ? { label: 'Breakfast', amount: breakdown.breakfast } : null,
+                  { label: 'Taxes', amount: breakdown.taxes },
                 ]
               : []
           }
           total={breakdown?.total || 0}
-          note={blocked || (room ? cancellationText(room.cancellationPolicy, room.price) : 'Select a room to continue.')}
+          note={
+            blocked ||
+            (plan ? (
+              <>
+                {plan.terms}
+                <details className="night-by-night">
+                  <summary>Night-by-night</summary>
+                  <ul>
+                    {plan.nights.map((n) => (
+                      <li key={n.date}>
+                        {formatDateString(n.date, { weekday: 'short', year: undefined })}: {formatPrice(n.price)} per room
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              </>
+            ) : (
+              'Select a room and rate to continue.'
+            ))
+          }
           action={
             <button type="button" className="btn btn-primary btn-block" disabled={!breakdown} onClick={reserve}>
               Reserve

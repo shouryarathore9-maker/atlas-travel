@@ -31,6 +31,7 @@ const bookingSchema = new mongoose.Schema(
       rooms: Number, // hotel
       ratePlan: String, // hotel: flexible | nonrefundable
       breakfast: Boolean, // hotel: breakfast add-on chosen
+      breakfastIncluded: Boolean, // hotel: the room type includes breakfast
     },
     travelDates: { start: Date, end: Date },
     travellers: [travellerSchema],

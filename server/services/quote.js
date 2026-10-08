@@ -49,7 +49,7 @@ export async function quoteBooking(input, { userId, offerCode, now = Date.now() 
       type: 'hotel',
       itemId: hotel._id,
       supplierId: hotel.supplierId,
-      selection: { roomTypeName: input.roomTypeName, rooms: input.rooms, ratePlan: priced.plan.key, breakfast: priced.breakfastAdded },
+      selection: { roomTypeName: input.roomTypeName, rooms: input.rooms, ratePlan: priced.plan.key, breakfast: priced.breakfastAdded, breakfastIncluded: priced.room.breakfastIncluded },
       travelDates: { start: istMidnight(input.checkIn), end: istMidnight(input.checkOut) },
       travellers: input.guests.map((g) => ({ ...g, name: fullName(g), ageCategory: 'adult' })),
       itemSummary: {

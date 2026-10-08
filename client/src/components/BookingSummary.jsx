@@ -1,17 +1,29 @@
 import { formatDate, formatDateTime, formatPrice } from '../lib/format.js';
 
+export function cancellationLabel(booking) {
+  if (booking.status !== 'cancelled') return null;
+  return booking.cancellation?.by === 'supplier' ? `Cancelled by the ${booking.type === 'flight' ? 'airline' : 'hotel'}` : 'Cancelled by you';
+}
+
 export default function BookingSummary({ booking }) {
   const isFlight = booking.type === 'flight';
   const f = booking.fareBreakdown;
+  const policy = booking.policySnapshot || {};
+  const reply = booking.specialRequest?.reply;
   return (
     <section className="card booking-summary" aria-label="Trip summary">
       <div className="spread">
         <div>
-          <p className="eyebrow">{isFlight ? 'Flight' : 'Stay'}</p>
+          <p className="eyebrow">
+            {isFlight ? 'Flight' : 'Stay'}
+            {booking.pnr && ` · PNR ${booking.pnr}`}
+          </p>
           <h2 className="h3">{booking.itemSummary.title}</h2>
           <p className="small">{booking.itemSummary.subtitle}</p>
         </div>
-        <span className={`badge ${booking.status === 'confirmed' ? 'badge-success' : 'badge-muted'}`}>{booking.status}</span>
+        <span className={`badge ${booking.status === 'confirmed' ? 'badge-success' : booking.cancellation?.by === 'supplier' ? 'badge-error' : 'badge-muted'}`}>
+          {cancellationLabel(booking) || 'Confirmed'}
+        </span>
       </div>
 
       <dl className="facts">
@@ -26,9 +38,10 @@ export default function BookingSummary({ booking }) {
         <div>
           <dt>{isFlight ? 'Travellers' : 'Guest'}</dt>
           <dd>
-            {booking.travellers.map((t) => (
-              <span key={t.name + (t.seat || '')} className="block">
+            {booking.travellers.map((t, i) => (
+              <span key={`${t.name}-${i}`} className="block">
                 {t.name}
+                {t.ageCategory && t.ageCategory !== 'adult' && ` (${t.ageCategory})`}
                 {t.seat && ` · seat ${t.seat}`}
                 {t.meal && ` · ${t.meal}`}
               </span>
@@ -36,37 +49,62 @@ export default function BookingSummary({ booking }) {
           </dd>
         </div>
         <div>
-          <dt>Free cancellation until</dt>
+          <dt>Cancellation</dt>
           <dd>
-            {booking.policySnapshot?.freeUntil && new Date(booking.policySnapshot.freeUntil) > new Date(booking.createdAt)
-              ? formatDateTime(booking.policySnapshot.freeUntil)
-              : `Not available — ${formatPrice(booking.policySnapshot?.feeAfterCutoff || 0)} fee applies`}
+            {policy.terms ||
+              (policy.freeUntil ? `Free until ${formatDateTime(policy.freeUntil)}` : `${formatPrice(policy.feeAfterCutoff || 0)} fee applies`)}
+            {policy.freeUntil && new Date(policy.freeUntil) > new Date() && booking.status === 'confirmed' && (
+              <span className="block small muted">Free until {formatDateTime(policy.freeUntil)}</span>
+            )}
           </dd>
         </div>
+        {booking.specialRequest?.text && (
+          <div>
+            <dt>Special request</dt>
+            <dd>
+              {booking.specialRequest.text}
+              <span className="block small muted">
+                {reply ? `${reply.status === 'accepted' ? 'Accepted' : 'Can’t accommodate'} by ${reply.by}${reply.comment ? ` — “${reply.comment}”` : ''}` : 'Waiting for a reply'}
+              </span>
+            </dd>
+          </div>
+        )}
       </dl>
 
       <dl className="price-lines">
         <div className="price-line">
-          <dt>Base</dt>
+          <dt>{isFlight ? 'Base fare' : 'Room charges'}</dt>
           <dd>{formatPrice(f.base)}</dd>
         </div>
-        <div className="price-line">
-          <dt>Taxes &amp; fees</dt>
-          <dd>{formatPrice(f.taxes)}</dd>
-        </div>
+        {f.discounts > 0 && (
+          <div className="price-line price-line-offer">
+            <dt>{booking.offer?.code || booking.offer?.title || 'Offer'}</dt>
+            <dd>−{formatPrice(f.discounts)}</dd>
+          </div>
+        )}
+        {f.infantFees > 0 && (
+          <div className="price-line">
+            <dt>Infant fees</dt>
+            <dd>{formatPrice(f.infantFees)}</dd>
+          </div>
+        )}
         {f.addons > 0 && (
           <div className="price-line">
-            <dt>Seats &amp; meals</dt>
+            <dt>{isFlight ? 'Seats & meals' : 'Breakfast'}</dt>
             <dd>{formatPrice(f.addons)}</dd>
           </div>
         )}
+        <div className="price-line">
+          <dt>Taxes</dt>
+          <dd>{formatPrice(f.taxes)}</dd>
+        </div>
         <div className="price-line price-total">
           <dt>Paid</dt>
           <dd>{formatPrice(f.total)}</dd>
         </div>
-        {booking.cancellation?.refundAmount !== undefined && booking.status === 'cancelled' && (
+        {booking.status === 'cancelled' && booking.cancellation?.refundAmount !== undefined && (
           <div className="price-line">
-            <dt>Simulated refund</dt>
+            <dt>Simulated refund{booking.cancellation.receiptNo ? ` · ${booking.cancellation.receiptNo}` : ''}</dt>
             <dd>{formatPrice(booking.cancellation.refundAmount)}</dd>
           </div>
         )}

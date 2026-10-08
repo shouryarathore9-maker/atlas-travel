@@ -27,7 +27,7 @@ export function describeTemplate(t) {
   if (!t) return '';
   if (t.fee.type === 'all') return 'Non-refundable.';
   const fee = t.fee.type === 'flat' ? `a ${inr(t.fee.amount)} fee` : 'one night’s charge';
-  if (!t.freeWindow) return `Cancellation costs ${fee}.`;
+  if (!t.freeWindow) return `No free cancellation — cancelling costs ${fee}.`;
   const unit = t.freeWindow.unit === 'hours' ? 'hour' : 'day';
   const when = t.freeWindow.unit === 'hours' ? 'departure' : 'check-in';
   return `Free cancellation until ${t.freeWindow.value} ${unit}${t.freeWindow.value === 1 ? '' : 's'} before ${when}, then ${fee}.`;

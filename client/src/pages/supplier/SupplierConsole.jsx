@@ -8,10 +8,18 @@ const LINKS = {
     { to: '/supplier', end: true, label: 'Overview', icon: 'chart' },
     { to: '/supplier/services', label: 'Services', icon: 'plane' },
     { to: '/supplier/departures', label: 'Departures', icon: 'calendar' },
+    { to: '/supplier/pricing', label: 'Pricing', icon: 'receipt' },
+    { to: '/supplier/policies', label: 'Policies', icon: 'suitcase' },
+    { to: '/supplier/requests', label: 'Requests & tickets', icon: 'alert' },
+    { to: '/supplier/offers', label: 'Offers', icon: 'star' },
   ],
   hotel: [
     { to: '/supplier', end: true, label: 'Overview', icon: 'chart' },
     { to: '/supplier/hotel', label: 'Property & rooms', icon: 'building' },
+    { to: '/supplier/reservations', label: 'Reservations', icon: 'calendar' },
+    { to: '/supplier/pricing', label: 'Pricing', icon: 'receipt' },
+    { to: '/supplier/requests', label: 'Requests & tickets', icon: 'alert' },
+    { to: '/supplier/offers', label: 'Offers', icon: 'star' },
   ],
 };
 

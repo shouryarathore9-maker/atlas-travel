@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useOutletContext, useSearchParams } from 'react-router-dom';
+import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import Modal from '../../components/Modal.jsx';
 import { Banner, EmptyState, ErrorState, SkeletonList } from '../../components/States.jsx';
 import { supplierApi } from '../../api/resources.js';
@@ -88,7 +88,7 @@ export default function Departures() {
                   <th scope="col">Route</th>
                   <th scope="col">Aircraft</th>
                   <th scope="col">Bookings</th>
-                  <th scope="col">Travellers</th>
+                  <th scope="col">Load</th>
                   <th scope="col">Revenue</th>
                   <th scope="col">Status</th>
                   <th scope="col">
@@ -102,13 +102,15 @@ export default function Departures() {
                   return (
                     <tr key={f._id}>
                       <td>{formatDateTime(f.departureTime)}</td>
-                      <td>{f.flightNumber}</td>
+                      <td>
+                        <Link to={`/supplier/departures/${f._id}`}>{f.flightNumber}</Link>
+                      </td>
                       <td>
                         {f.origin.code} → {f.destination.code}
                       </td>
                       <td>{f.aircraftName}</td>
                       <td>{f.bookings}</td>
-                      <td>{f.travellers}</td>
+                      <td>{f.cabins?.economy ? `${Math.round(((f.cabins.economy.sold + (f.cabins.business?.sold || 0)) / (f.cabins.economy.capacity + (f.cabins.business?.capacity || 0))) * 100)}%` : '—'}</td>
                       <td>{formatPrice(f.revenue)}</td>
                       <td>
                         <span className={`badge ${status.tone}`}>{status.text}</span>

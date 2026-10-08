@@ -17,7 +17,7 @@ export default function StayCard({ hotel, href, price, priceLabel = 'per night' 
         </p>
         <RatingBadge rating={hotel.rating} />
         <p className="small stay-card-amenities">{hotel.amenities.filter((a) => !['Free Wi-Fi', 'Air conditioning'].includes(a)).slice(0, 2).join(' · ')}</p>
-        {price !== undefined && (
+        {price != null && (
           <p className="stay-card-price">
             <span className="price">{formatPrice(price)}</span>
             <span className="small muted">{priceLabel}</span>

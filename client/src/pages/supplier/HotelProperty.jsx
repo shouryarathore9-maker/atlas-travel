@@ -14,13 +14,13 @@ const blankRoom = () => ({
   bedType: 'King bed',
   amenities: [],
   breakfastIncluded: false,
-  price: '',
+  baseRate: '',
   taxesAndFees: 0,
   roomsTotal: 5,
   salesStopped: false,
 });
 
-const fromHotel = (h) => ({
+const fromHotel = (h, baseRates = {}) => ({
   description: h.description || '',
   amenities: h.amenities,
   photos: h.photos,
@@ -32,7 +32,7 @@ const fromHotel = (h) => ({
     bedType: r.bedType,
     amenities: r.amenities,
     breakfastIncluded: r.breakfastIncluded,
-    price: r.price,
+    baseRate: baseRates[r.name] ?? '',
     taxesAndFees: r.taxesAndFees,
     roomsTotal: r.roomsTotal ?? r.roomsAvailable,
     roomsAvailable: r.roomsAvailable,
@@ -50,7 +50,7 @@ function validate(v) {
   v.roomTypes.forEach((r, i) => {
     if (r.name.trim().length < 2) e[`room${i}.name`] = 'Required';
     else if (names.indexOf(r.name.trim().toLowerCase()) !== i) e[`room${i}.name`] = 'Room names must be unique';
-    if (!(Number(r.price) >= 500)) e[`room${i}.price`] = 'At least ₹500';
+    if (!(Number(r.baseRate) >= 500)) e[`room${i}.baseRate`] = 'At least ₹500';
     if (!(Number(r.occupancy.adults) >= 1)) e[`room${i}.adults`] = 'At least 1';
     if (!(Number(r.roomsTotal) >= 0)) e[`room${i}.roomsTotal`] = '0 or more';
   });
@@ -72,8 +72,8 @@ export default function HotelProperty() {
 
   useEffect(() => {
     Promise.all([supplierApi.hotel.get(), supplierApi.catalogue()])
-      .then(([{ hotel }, cat]) => {
-        setValues(fromHotel(hotel));
+      .then(([{ hotel, baseRates }, cat]) => {
+        setValues(fromHotel(hotel, baseRates));
         setCatalogue(cat);
       })
       .catch(setLoadError);
@@ -102,12 +102,13 @@ export default function HotelProperty() {
         roomTypes: values.roomTypes.map(({ roomsAvailable: _avail, ...r }) => ({
           ...r,
           occupancy: { adults: Number(r.occupancy.adults), children: Number(r.occupancy.children) },
-          price: Number(r.price),
+          baseRate: Number(r.baseRate),
           taxesAndFees: Number(r.taxesAndFees),
           roomsTotal: Number(r.roomsTotal),
         })),
       });
-      setValues(fromHotel(hotel));
+      const fresh = await supplierApi.hotel.get();
+      setValues(fromHotel(hotel, fresh.baseRates));
       setSubmitted(false);
       setSaved(true);
     } catch (err) {
@@ -186,7 +187,7 @@ export default function HotelProperty() {
                 <Field label="Bed type" value={r.bedType} onChange={(e) => setRoom(i, { bedType: e.target.value })} />
                 <Field label="Max adults" type="number" min={1} max={8} value={r.occupancy.adults} onChange={(e) => setRoom(i, { occupancy: { ...r.occupancy, adults: e.target.value } })} error={errors[`room${i}.adults`]} />
                 <Field label="Max children" type="number" min={0} max={6} value={r.occupancy.children} onChange={(e) => setRoom(i, { occupancy: { ...r.occupancy, children: e.target.value } })} />
-                <Field label="Price / night (₹)" type="number" min={500} value={r.price} onChange={(e) => setRoom(i, { price: e.target.value })} error={errors[`room${i}.price`]} hint="Until your rate card is set up" />
+                <Field label="Base rate / night (₹)" type="number" min={500} value={r.baseRate} onChange={(e) => setRoom(i, { baseRate: e.target.value })} error={errors[`room${i}.baseRate`]} hint="Your rate card’s base for this room" />
                 <Field label="Taxes / night (₹)" type="number" min={0} value={r.taxesAndFees} onChange={(e) => setRoom(i, { taxesAndFees: e.target.value })} />
                 <Field
                   label="Rooms of this type"

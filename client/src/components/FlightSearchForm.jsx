@@ -1,16 +1,20 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from './Icon.jsx';
+import PartyPicker from './PartyPicker.jsx';
 import { CITIES } from '../lib/cities.js';
 import { addDays, isDateString, lastBookableDate, todayIst } from '../lib/dates.js';
+import { readParty } from '../lib/pricing.js';
 
-export function validateFlightSearch({ origin, destination, date }) {
+export function validateFlightSearch({ origin, destination, date, adults = 1, children = 0, infants = 0 }) {
   if (!origin) return { field: 'origin', message: 'Choose where you are flying from' };
   if (!destination) return { field: 'destination', message: 'Choose where you are flying to' };
   if (origin === destination) return { field: 'destination', message: 'Pick a destination different from your origin' };
   if (!isDateString(date)) return { field: 'date', message: 'Choose a travel date' };
   if (date < todayIst()) return { field: 'date', message: 'Travel date can’t be in the past' };
   if (date > lastBookableDate()) return { field: 'date', message: 'Flights can be booked up to 60 days ahead' };
+  if (Number(adults) + Number(children) > 9) return { field: 'party', message: 'A booking can have at most 9 adults and children' };
+  if (Number(infants) > Number(adults)) return { field: 'party', message: 'Each infant needs an adult to travel with' };
   return null;
 }
 
@@ -20,7 +24,7 @@ export default function FlightSearchForm({ initial = {}, compact = false }) {
     origin: initial.origin ?? 'DEL',
     destination: initial.destination ?? 'BOM',
     date: initial.date ?? addDays(todayIst(), 1),
-    travellers: initial.travellers ?? 1,
+    ...readParty(initial),
     cabin: initial.cabin ?? 'economy',
   });
   const invalid = validateFlightSearch(values);
@@ -98,17 +102,11 @@ export default function FlightSearchForm({ initial = {}, compact = false }) {
             />
           </div>
         </div>
-        <div className="pill-field">
+        <div className={pillClass('party')}>
           <Icon name="guest" />
           <div className="pill-body">
-            <label htmlFor="fs-travellers">Travellers</label>
-            <select id="fs-travellers" value={values.travellers} onChange={set('travellers')}>
-              {Array.from({ length: 9 }, (_, i) => (
-                <option key={i + 1} value={i + 1}>
-                  {i + 1} {i === 0 ? 'traveller' : 'travellers'}
-                </option>
-              ))}
-            </select>
+            <label htmlFor="fs-party">Travellers</label>
+            <PartyPicker id="fs-party" value={{ adults: values.adults, children: values.children, infants: values.infants }} onChange={(party) => setValues((v) => ({ ...v, ...party }))} />
           </div>
         </div>
         <div className="pill-field">

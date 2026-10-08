@@ -19,7 +19,7 @@ export default function PriceSummary({ title = 'Price summary', lines, total, no
             <dd>{lines.some(Boolean) ? formatPrice(total) : <span aria-label="Not yet calculated">—</span>}</dd>
           </div>
         </dl>
-        {note && <p className="small muted">{note}</p>}
+        {note && <div className="small muted price-note">{note}</div>}
         <div className="price-summary-action">{action}</div>
       </div>
     </aside>

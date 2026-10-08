@@ -12,6 +12,7 @@ import { useResultParams } from '../hooks/useResultParams.js';
 import { cityByCode } from '../lib/cities.js';
 import { todayIst } from '../lib/dates.js';
 import { formatDateString, pluralize } from '../lib/format.js';
+import { partyLabel, readParty } from '../lib/pricing.js';
 
 const DEPARTURE_OPTIONS = [
   { value: 'early', label: 'Before 6 AM' },
@@ -37,6 +38,7 @@ export default function FlightResults() {
   const to = cityByCode(q.destination)?.city || q.destination;
   useDocumentTitle(`Flights ${from} to ${to}`);
 
+  const party = readParty(q);
   const queryKey = JSON.stringify(q);
   const pastDate = Boolean(q.date) && q.date < todayIst();
   const { data, error, loading, reload } = useAsync(
@@ -49,7 +51,9 @@ export default function FlightResults() {
           origin: q.origin,
           destination: q.destination,
           date: q.date,
-          travellers: q.travellers,
+          adults: party.adults,
+          children: party.children,
+          infants: party.infants,
           cabin: q.cabin,
           stops: q.stops,
           airlines: q.airlines,
@@ -115,7 +119,7 @@ export default function FlightResults() {
               {from} <Icon name="arrowRight" size={16} /> {to}
             </p>
             <p className="small muted">
-              {q.date && formatDateString(q.date, { weekday: 'short' })} · {pluralize(Number(q.travellers) || 1, 'traveller')} ·{' '}
+              {q.date && formatDateString(q.date, { weekday: 'short' })} · {partyLabel(party)} ·{' '}
               {q.cabin === 'business' ? 'Business' : 'Economy'}
             </p>
           </div>
@@ -214,7 +218,7 @@ export default function FlightResults() {
                   </EmptyState>
                 ))}
               {data.results.map((flight) => (
-                <FlightCard key={flight._id} flight={flight} travellers={q.travellers || 1} cabin={q.cabin || 'economy'} />
+                <FlightCard key={flight._id} flight={flight} party={party} cabin={q.cabin || 'economy'} />
               ))}
               {data.pages > 1 && (
                 <nav className="pagination" aria-label="Result pages">

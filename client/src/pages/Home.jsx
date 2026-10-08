@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import BestHotels from '../components/BestHotels.jsx';
+import OffersToday from '../components/OffersToday.jsx';
 import Icon from '../components/Icon.jsx';
 import Nav from '../components/Nav.jsx';
 import SearchCard from '../components/SearchCard.jsx';
@@ -18,7 +19,7 @@ const ORDERED_CITIES = [
 
 const PROMISES = [
   { icon: 'location', title: 'Handpicked stays', text: 'In India’s eight great cities' },
-  { icon: 'check', title: 'One honest price', text: 'Taxes shown before you pay' },
+  { icon: 'check', title: 'One honest price', text: 'No convenience fee — you pay the fare and taxes, nothing else.' },
   { icon: 'compass', title: 'No upsell detours', text: 'Nothing you didn’t ask for' },
 ];
 
@@ -80,6 +81,7 @@ export default function Home() {
         </section>
 
         <div className="container">
+          <OffersToday />
 
           <section className="section" id="destinations" aria-labelledby="featured-heading">
             <div className="spread section-head">

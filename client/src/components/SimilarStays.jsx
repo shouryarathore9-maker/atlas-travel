@@ -39,7 +39,7 @@ export default function SimilarStays({ hotel, stay, nights }) {
       <ul className="stay-grid">
         {similar.map((h) => (
           <li key={h._id}>
-            <StayCard hotel={h} href={`/hotels/${h._id}?${query}`} price={h.price} />
+            <StayCard hotel={h} href={`/hotels/${h._id}?${query}`} price={h.price} priceLabel="avg per night" />
           </li>
         ))}
       </ul>

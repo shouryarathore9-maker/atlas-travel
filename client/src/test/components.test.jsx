@@ -59,20 +59,27 @@ describe('Flight search form (story 2)', () => {
     const user = userEvent.setup();
     renderAt(<FlightSearchForm />);
     await user.click(screen.getByRole('button', { name: /search flights/i }));
-    expect(screen.getByTestId('location')).toHaveTextContent(/^\/flights\?origin=DEL&destination=BOM&date=\d{4}-\d{2}-\d{2}&travellers=1&cabin=economy$/);
+    expect(screen.getByTestId('location')).toHaveTextContent(/^\/flights\?origin=DEL&destination=BOM&date=\d{4}-\d{2}-\d{2}&adults=1&children=0&infants=0&cabin=economy$/);
   });
 });
 
 describe('Seat map (story 5)', () => {
-  const seatMap = { rows: 2, columns: 6, unavailableSeats: ['1A'], seatPricing: { window: 350, aisle: 300, middle: 0 } };
+  const seatMap = {
+    rows: [5, 6],
+    layout: ['A', 'B', 'C', '', 'D', 'E', 'F'],
+    extraLegroomRows: [5],
+    unavailableSeats: ['6A'],
+    fees: { window: 350, aisle: 300, middle: 0, extraLegroom: 600 },
+  };
 
   it('disables unavailable seats and announces seat details', async () => {
     const picked = [];
     const user = userEvent.setup();
-    render(<SeatMap seatMap={seatMap} assigned={['']} onSelect={(s) => picked.push(s)} />);
-    expect(screen.getByRole('button', { name: /Seat 1A, window, .*unavailable/ })).toBeDisabled();
-    await user.click(screen.getByRole('button', { name: /Seat 2C, aisle/ }));
-    expect(picked).toEqual(['2C']);
+    render(<SeatMap seatMap={seatMap} cabin="economy" assigned={['']} onSelect={(s) => picked.push(s)} />);
+    expect(screen.getByRole('button', { name: /Seat 6A, window, .*unavailable/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Seat 5B, extra legroom, ₹600/ })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: /Seat 6C, aisle/ }));
+    expect(picked).toEqual(['6C']);
   });
 });
 

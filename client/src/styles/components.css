@@ -584,3 +584,7 @@ legend {
     gap: var(--space-1);
   }
 }
+.badge-error {
+  background: #f6e3e3;
+  color: var(--color-error-ink);
+}

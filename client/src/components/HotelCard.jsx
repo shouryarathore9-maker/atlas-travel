@@ -33,7 +33,7 @@ export default function HotelCard({ hotel, stayQuery }) {
       </div>
       <div className="result-price">
         <p className="price">{formatPrice(hotel.price)}</p>
-        <p className="small muted">per night, before taxes</p>
+        <p className="small muted">avg per night, before taxes</p>
         <p className="small muted">{pluralize(hotel.nights, 'night')}</p>
         <Link to={href} className="btn btn-secondary btn-sm card-cta" aria-label={`See rooms at ${hotel.name}`}>
           See rooms

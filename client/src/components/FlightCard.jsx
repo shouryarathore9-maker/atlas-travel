@@ -5,9 +5,9 @@ import { formatDuration, formatPrice, formatTime, stopsLabel } from '../lib/form
 // Calendar day in IST, so "+1" is correct regardless of the viewer's timezone.
 const istDay = (date) => Math.floor((new Date(date).getTime() + 5.5 * 3600 * 1000) / 86400000);
 
-export default function FlightCard({ flight, travellers, cabin }) {
+export default function FlightCard({ flight, party, cabin }) {
   const plusDays = istDay(flight.arrivalTime) - istDay(flight.departureTime);
-  const href = `/flights/${flight._id}?${new URLSearchParams({ travellers, cabin })}`;
+  const href = `/flights/${flight._id}?${new URLSearchParams({ ...party, cabin })}`;
   return (
     // Whole card is clickable, same pattern as HotelCard: overlay link under the real button.
     <article className="result-card flight-card clickable-card fade-in">

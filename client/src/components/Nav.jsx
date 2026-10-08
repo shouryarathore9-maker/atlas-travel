@@ -34,6 +34,9 @@ export default function Nav() {
             <Link to="/#destinations" className="nav-link" onClick={() => scrollToSection('destinations')}>
               Destinations
             </Link>
+            <Link to="/#offers" className="nav-link" onClick={() => scrollToSection('offers')}>
+              Offers
+            </Link>
             <Link to="/#best-hotels" className="nav-link" onClick={() => scrollToSection('best-hotels')}>
               Stays
             </Link>
@@ -44,6 +47,11 @@ export default function Nav() {
           {user?.role === 'traveler' && (
             <NavLink to="/bookings" className="nav-link">
               My trips
+            </NavLink>
+          )}
+          {user?.role === 'traveler' && (
+            <NavLink to="/travellers" className="nav-link hide-phone">
+              Saved travellers
             </NavLink>
           )}
           {isManager(user) && (

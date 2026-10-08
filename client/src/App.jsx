@@ -25,7 +25,27 @@ const Services = lazy(() => import('./pages/supplier/Services.jsx'));
 const ServiceForm = lazy(() => import('./pages/supplier/ServiceForm.jsx'));
 const Departures = lazy(() => import('./pages/supplier/Departures.jsx'));
 const HotelProperty = lazy(() => import('./pages/supplier/HotelProperty.jsx'));
+const DepartureDetail = lazy(() => import('./pages/supplier/DepartureDetail.jsx'));
+const Reservations = lazy(() => import('./pages/supplier/Reservations.jsx'));
+const Pricing = lazy(() => import('./pages/supplier/Pricing.jsx'));
+const Policies = lazy(() => import('./pages/supplier/Policies.jsx'));
+const SupplierRequests = lazy(() => import('./pages/supplier/Requests.jsx'));
+const SupplierTicket = lazy(() => import('./pages/supplier/SupplierTicket.jsx'));
+const SupplierOffers = lazy(() => import('./pages/supplier/SupplierOffers.jsx'));
 const AdminConsole = lazy(() => import('./pages/admin/AdminConsole.jsx'));
+const AdminBookings = lazy(() => import('./pages/admin/AdminBookings.jsx'));
+const AdminBookingDetail = lazy(() => import('./pages/admin/AdminBookingDetail.jsx'));
+const AdminTickets = lazy(() => import('./pages/admin/AdminTickets.jsx'));
+const AdminTicket = lazy(() => import('./pages/admin/AdminTicket.jsx'));
+const AdminSpecialRequests = lazy(() => import('./pages/admin/AdminSpecialRequests.jsx'));
+const AdminOffers = lazy(() => import('./pages/admin/AdminOffers.jsx'));
+const AdminSettings = lazy(() => import('./pages/admin/AdminSettings.jsx'));
+const OfferEditor = lazy(() => import('./pages/OfferEditor.jsx'));
+const Documents = lazy(() => import('./pages/Documents.jsx'));
+const HelpTicket = lazy(() => import('./pages/HelpTicket.jsx'));
+const SavedTravellers = lazy(() => import('./pages/SavedTravellers.jsx'));
+const OffersPage = lazy(() => import('./pages/Offers.jsx').then((m) => ({ default: m.OffersPage })));
+const OfferDetail = lazy(() => import('./pages/Offers.jsx').then((m) => ({ default: m.OfferDetail })));
 const AuditLog = lazy(() => import('./pages/admin/AuditLog.jsx'));
 
 function ScrollToTop() {
@@ -80,16 +100,39 @@ export default function App() {
           <Route path="/checkout" element={authed(<Checkout />, 'traveler')} />
           <Route path="/bookings" element={authed(<MyBookings />, 'traveler')} />
           <Route path="/bookings/:reference/confirmation" element={authed(<Confirmation />, 'traveler')} />
+          <Route path="/bookings/:reference/documents" element={authed(<Documents />, 'traveler')} />
+          <Route path="/help/:id" element={authed(<HelpTicket />, 'traveler')} />
+          <Route path="/travellers" element={authed(<SavedTravellers />, 'traveler')} />
+          <Route path="/offers" element={<OffersPage />} />
+          <Route path="/offers/:slug" element={<OfferDetail />} />
           <Route path="/supplier" element={authed(<SupplierConsole />, 'manager')}>
             <Route index element={<SupplierOverview />} />
             <Route path="services" element={<Services />} />
             <Route path="services/new" element={<ServiceForm />} />
             <Route path="services/:id" element={<ServiceForm key="edit" />} />
             <Route path="departures" element={<Departures />} />
+            <Route path="departures/:id" element={<DepartureDetail />} />
             <Route path="hotel" element={<HotelProperty />} />
+            <Route path="reservations" element={<Reservations />} />
+            <Route path="pricing" element={<Pricing />} />
+            <Route path="policies" element={<Policies />} />
+            <Route path="requests" element={<SupplierRequests />} />
+            <Route path="tickets/:id" element={<SupplierTicket />} />
+            <Route path="offers" element={<SupplierOffers />} />
+            <Route path="offers/new" element={<OfferEditor scope="supplier" />} />
+            <Route path="offers/:id" element={<OfferEditor scope="supplier" key="edit" />} />
           </Route>
           <Route path="/admin" element={authed(<AdminConsole />, 'admin')}>
-            <Route index element={<Navigate to="/admin/audit" replace />} />
+            <Route index element={<Navigate to="/admin/bookings" replace />} />
+            <Route path="bookings" element={<AdminBookings />} />
+            <Route path="bookings/:ref" element={<AdminBookingDetail />} />
+            <Route path="tickets" element={<AdminTickets />} />
+            <Route path="tickets/:id" element={<AdminTicket />} />
+            <Route path="special-requests" element={<AdminSpecialRequests />} />
+            <Route path="offers" element={<AdminOffers />} />
+            <Route path="offers/new" element={<OfferEditor scope="admin" />} />
+            <Route path="offers/:id" element={<OfferEditor scope="admin" key="edit" />} />
+            <Route path="settings" element={<AdminSettings />} />
             <Route path="audit" element={<AuditLog />} />
           </Route>
           <Route path="*" element={<NotFound />} />

@@ -49,11 +49,19 @@ export default function Confirmation() {
         <p className="booking-ref">
           Booking reference <strong>{booking.bookingReference}</strong>
         </p>
+        {booking.pnr && (
+          <p className="booking-ref small">
+            Airline PNR <strong>{booking.pnr}</strong>
+          </p>
+        )}
       </div>
 
       <BookingSummary booking={booking} />
 
       <div className="row confirmation-actions">
+        <Link to={`/bookings/${booking.bookingReference}/documents`} className="btn btn-secondary">
+          {booking.type === 'flight' ? 'View e-ticket' : 'View voucher'}
+        </Link>
         <Link to="/bookings" className="btn btn-primary">
           View my bookings
         </Link>

@@ -462,6 +462,7 @@ taxes  = taxesAndFees × rooms × nights     (fixed; unaffected by discounts)
 | tickets | per ticket | closed/resolved: TTL 1 year |
 | statements, adjustments | ≤ 52/month | permanent |
 | sandboxes + tagged docs | per visitor | 30 min idle / 2 h hard TTL; daily sweep |
+| photos (hotel uploads) | per upload | ≤ 4 per hotel, ≤ 350 KB each (≈ 67 MB worst case); unused uploads deleted by the daily job after 1 day |
 | ratelimits | per window | TTL (existing) |
 
 **Estimated size** (to be measured, not trusted): departures ~8,640 × ~0.9 KB ≈ 8 MB + indexes ≈ 2 MB; reviews ~1,000 docs (down from 6,945) ≈ 0.2 MB; history ~900 bookings + ~600 past departures ≈ 2 MB; 20 full sandboxes worst case ≈ 30 MB. Target: under 128 MB (25% of M0). **Measured baseline before Phase 2 (2026-10-08):** 6.5 MB data + 1.2 MB indexes (3,170 flights, 6,945 reviews, 48 hotels).
@@ -527,9 +528,18 @@ Stage 1 (foundations):
 6. **Manager accounts** are named after their supplier ("IndiGo manager"); the header shows a staff account's full name rather than a first name.
 7. **Measured after Stage 1 seed (2026-10-08, `travel_app_phase2`):** 14.90 MB data + 1.05 MB indexes; 8,568 departures (avg 1.7 KB, still carrying interim fares/meals), 144 services, 52 suppliers, 691 reviews (was 6,945), 54 users. The live `travel_app` database is unchanged at 6.49 MB.
 
+Stages 2–5 (pricing, traveller documents, supplier operations, offers):
+8. **Quote endpoint** is `POST /api/payments/quote` (next to the payment it mirrors), not `/api/offers/quote`. Traveller help tickets and saved travellers live under `/api/me/tickets` and `/api/me/travellers`. The payment request carries `expectedTotal` and `offerCode`; a mismatch returns `409 PRICE_CHANGED` with the new quote and a plain reason.
+9. **Rate card holds tiers and seat fees** (as the PRD's rate card table lists them); the airline **Policies** page holds only meals per cabin and blocked seats. A hotel's base rates are edited on the Pricing page and, for convenience, with each room type on Property & rooms (renaming a room moves its base rate).
+10. **Blocked seats** reduce a cabin's `capacity` when a departure is created. Changing them rebuilds un-booked future departures of that aircraft; departures with bookings keep their seats.
+11. **Seeded departures start partly sold** (10–80% economy, 0–50% business, deterministic per departure), so the demand factor and seat maps look real. Those seats are "other passengers", not bookings.
+12. **Booking** also stores `selection.breakfastIncluded` (for the voucher) and `fareBreakdown.seatCharges/mealCharges/breakfast` (for display). Offer records carry `supplierName` and `endNotified` (so expiry/exhaustion is announced once). Tickets carry a `subject`.
+13. **Hotel photo uploads** (owner request): new `photos` collection (`supplierId`, `hotelId`, `contentType`, `size`, `data`); `GET /api/photos/:id` serves them publicly with `Content-Type` from the sniffed bytes, `nosniff`, a `default-src 'none'; sandbox` CSP and a one-year immutable cache; `GET/POST/DELETE /api/supplier/hotel/photos`. Hotel `photos[]` accepts gallery paths or the hotel's own `/api/photos/<id>` URLs, up to 6.
+14. **Templates text:** a template without a free window reads "No free cancellation — cancelling costs …".
+
 ## Phase 2 Data-Model Changes (logged per AGENTS.md)
 1. **User:** `role` gains `airline_manager` and `hotel_manager`; adds `supplierId`; `savedTravellers` becomes `{ firstName, lastName, ageCategory }` (≤ 20); adds `sandboxId`.
-2. **New collections:** `suppliers`, `services`, `offers` (replaces the unused `coupons` stub, which is dropped), `cancellationtemplates`, `configs`, `notifications`, `auditlogs`, `tickets`, `statements`, `adjustments`, `events`, `dailystats`, `sandboxes`.
+2. **New collections:** `suppliers`, `services`, `offers` (replaces the unused `coupons` stub, which is dropped), `cancellationtemplates`, `configs`, `notifications`, `auditlogs`, `tickets`, `statements`, `adjustments`, `events`, `dailystats`, `sandboxes`, `photos` (hotel uploads).
 3. **Flight:** adds `supplierId`, `serviceId`, `date`, `aircraftConfig`, `cabins`, `status`, `salesStopped`, `scheduleChange`, `cancellationJob`, `checkInSeq`, `seatMap.blockedSeats`, sandbox fields; **removes** `fareOptions` (tiers, baggage and templates now come from the rate card), `mealOptions` (supplier policies) and `seatMap.rows/columns/seatPricing` (aircraft catalogue and rate card). Unique index `(serviceId, date)`.
 4. **Hotel:** adds `supplierId`, `salesStopped`, `roomTypes[].roomsTotal`, `roomTypes[].salesStopped`, sandbox fields; **removes** `roomTypes[].price` (rate card) and `roomTypes[].cancellationPolicy` (templates).
 5. **Review:** `itemType` `'flight'` becomes `'service'` (reviews per service).
