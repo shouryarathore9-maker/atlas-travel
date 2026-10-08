@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
+import Supplier from '../models/Supplier.js';
+import User, { MANAGER_ROLES } from '../models/User.js';
 import { HttpError } from '../utils/httpError.js';
 
 export const AUTH_COOKIE = 'atlas_token';
@@ -22,6 +23,20 @@ export function signToken(user) {
   return jwt.sign({ sub: String(user._id), role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
 }
 
+export const SUSPENDED_MESSAGE = 'Your organisation’s Atlas account is suspended. Please contact Atlas support.';
+
+// A manager of a suspended supplier is locked out, including sessions that were already open.
+export async function managerSuspended(user) {
+  if (!MANAGER_ROLES.includes(user?.role) || !user.supplierId) return false;
+  const supplier = await Supplier.findById(user.supplierId, { status: 1 }).lean();
+  return supplier?.status === 'suspended';
+}
+
+function clearSession(res) {
+  const { maxAge: _maxAge, ...options } = cookieOptions();
+  res.clearCookie(AUTH_COOKIE, options);
+}
+
 export async function requireAuth(req, res, next) {
   const token = req.cookies?.[AUTH_COOKIE];
   if (!token) throw new HttpError(401, 'Please sign in to continue.', 'UNAUTHENTICATED');
@@ -36,6 +51,10 @@ export async function requireAuth(req, res, next) {
   // Re-read the user so deleted accounts and role changes take effect immediately.
   const user = await User.findById(payload.sub);
   if (!user) throw new HttpError(401, 'Please sign in to continue.', 'UNAUTHENTICATED');
+  if (await managerSuspended(user)) {
+    clearSession(res);
+    throw new HttpError(403, SUSPENDED_MESSAGE, 'SUPPLIER_SUSPENDED');
+  }
   req.user = user;
   next();
 }
@@ -46,7 +65,13 @@ export async function optionalAuth(req, res, next) {
   if (token) {
     try {
       const payload = jwt.verify(token, process.env.JWT_SECRET);
-      req.user = await User.findById(payload.sub);
+      const user = await User.findById(payload.sub);
+      if (user && (await managerSuspended(user))) {
+        clearSession(res);
+        req.user = null;
+      } else {
+        req.user = user;
+      }
     } catch {
       req.user = null;
     }

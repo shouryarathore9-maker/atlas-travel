@@ -8,6 +8,7 @@ import Payment from '../models/Payment.js';
 import Supplier from '../models/Supplier.js';
 import Ticket from '../models/Ticket.js';
 import User from '../models/User.js';
+import { audit } from '../services/audit.js';
 import { HttpError } from '../utils/httpError.js';
 import { pagination } from '../utils/query.js';
 
@@ -42,8 +43,60 @@ export async function listAudit(req, res) {
 }
 
 export async function listSuppliers(req, res) {
-  const suppliers = await Supplier.find({}, { name: 1, kind: 1, code: 1 }).sort({ kind: 1, name: 1 }).lean();
-  res.json({ suppliers });
+  const suppliers = await Supplier.find({}, { name: 1, kind: 1, code: 1, status: 1, suspension: 1 }).sort({ kind: 1, name: 1 }).lean();
+  const [managers, upcoming] = await Promise.all([
+    User.find({ supplierId: { $in: suppliers.map((s) => s._id) } }, { name: 1, email: 1, supplierId: 1 }).lean(),
+    Booking.aggregate([
+      { $match: { status: 'confirmed', 'travelDates.start': { $gte: new Date() }, supplierId: { $in: suppliers.map((s) => s._id) } } },
+      { $group: { _id: '$supplierId', n: { $sum: 1 } } },
+    ]),
+  ]);
+  const managerOf = Object.fromEntries(managers.map((m) => [String(m.supplierId), { name: m.name, email: m.email }]));
+  const upcomingOf = Object.fromEntries(upcoming.map((u) => [String(u._id), u.n]));
+  res.json({
+    suppliers: suppliers.map((s) => ({
+      ...s,
+      status: s.status || 'active',
+      manager: managerOf[String(s._id)] || null,
+      upcomingBookings: upcomingOf[String(s._id)] || 0,
+    })),
+  });
+}
+
+// ---------- Suspend / reactivate a supplier ----------
+
+export const suspendSchema = z.object({ reason: z.string().trim().min(5, 'Give a short reason (at least 5 characters)').max(300) });
+
+async function setSupplierStatus(req, status, reason = '') {
+  if (!mongoose.isValidObjectId(req.params.id)) throw new HttpError(404, 'We could not find that supplier.', 'NOT_FOUND');
+  const supplier = await Supplier.findById(req.params.id);
+  if (!supplier) throw new HttpError(404, 'We could not find that supplier.', 'NOT_FOUND');
+  const current = supplier.status || 'active';
+  if (current === status) {
+    throw new HttpError(409, status === 'suspended' ? `${supplier.name} is already suspended.` : `${supplier.name} is already active.`, 'NO_CHANGE');
+  }
+  const before = { status: current, reason: supplier.suspension?.reason || '' };
+  supplier.status = status;
+  supplier.suspension = status === 'suspended' ? { reason, at: new Date(), by: req.user.name } : { reason: '', at: null, by: '' };
+  await supplier.save();
+  await audit(req, {
+    action: status === 'suspended' ? 'supplier.suspend' : 'supplier.reactivate',
+    target: { type: 'supplier', id: supplier._id, label: supplier.name },
+    supplierId: supplier._id,
+    before,
+    after: { status, reason },
+  });
+  return supplier;
+}
+
+export async function suspendSupplier(req, res) {
+  const supplier = await setSupplierStatus(req, 'suspended', req.validated.body.reason);
+  res.json({ supplier: { _id: supplier._id, name: supplier.name, status: supplier.status, suspension: supplier.suspension } });
+}
+
+export async function reactivateSupplier(req, res) {
+  const supplier = await setSupplierStatus(req, 'active');
+  res.json({ supplier: { _id: supplier._id, name: supplier.name, status: supplier.status, suspension: supplier.suspension } });
 }
 
 // ---------- Bookings (read-only) and special requests ----------

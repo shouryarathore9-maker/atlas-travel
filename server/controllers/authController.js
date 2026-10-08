@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import User from '../models/User.js';
-import { AUTH_COOKIE, cookieOptions, signToken } from '../middleware/auth.js';
+import { AUTH_COOKIE, cookieOptions, managerSuspended, signToken, SUSPENDED_MESSAGE } from '../middleware/auth.js';
 import { HttpError } from '../utils/httpError.js';
 import { personName } from '../utils/names.js';
 
@@ -49,6 +49,8 @@ export async function login(req, res) {
   const user = await User.findOne({ email });
   const ok = await bcrypt.compare(password, user?.passwordHash || DUMMY_HASH);
   if (!user || !ok) throw new HttpError(401, 'Invalid email or password.', 'INVALID_CREDENTIALS');
+  // Checked only after the password, so it never reveals which emails belong to a suspended supplier.
+  if (await managerSuspended(user)) throw new HttpError(403, SUSPENDED_MESSAGE, 'SUPPLIER_SUSPENDED');
   startSession(res, user);
   res.json({ user: user.toPublic() });
 }

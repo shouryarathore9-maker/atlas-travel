@@ -3,6 +3,7 @@ import ConsoleLayout from '../../components/ConsoleLayout.jsx';
 // Admin console sections are added stage by stage (architecture.md §15).
 const LINKS = [
   { to: '/admin/bookings', label: 'Bookings', icon: 'list' },
+  { to: '/admin/suppliers', label: 'Suppliers', icon: 'compass' },
   { to: '/admin/tickets', label: 'Tickets', icon: 'alert' },
   { to: '/admin/special-requests', label: 'Special requests', icon: 'check' },
   { to: '/admin/offers', label: 'Offers', icon: 'receipt' },

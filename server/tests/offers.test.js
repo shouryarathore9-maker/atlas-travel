@@ -140,7 +140,7 @@ describe('managing offers (workflow 18)', () => {
   const body = (o = {}) => ({
     title: 'Monsoon stays',
     summary: '15% off',
-    image: '/images/seed/hotels/hotel-4.jpg',
+    image: '/images/seed/offers/gift.jpg',
     auto: false,
     code: 'MONSOON15',
     scope: 'hotels',

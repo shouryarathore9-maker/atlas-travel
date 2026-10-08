@@ -8,25 +8,27 @@ import { istMidnight } from '../utils/dates.js';
 import { HttpError } from '../utils/httpError.js';
 import { finalize, priceFlight, priceHotel } from './bookingService.js';
 import { chooseOffer } from './offers.js';
+import { getPricingLimits } from './pricingLimits.js';
+import { isSuspended } from './suppliers.js';
 import { loadTemplates, policySnapshot } from './templates.js';
 
 async function load(Model, id, what) {
   const doc = await Model.findById(id).lean();
   if (!doc) throw new HttpError(404, `We could not find that ${what}.`, 'NOT_FOUND');
   const supplier = doc.supplierId ? await Supplier.findById(doc.supplierId).lean() : null;
-  if (!supplier?.rateCard?.kind) throw new HttpError(409, `This ${what} isn’t on sale right now.`, 'NOT_ON_SALE');
+  if (!supplier?.rateCard?.kind || isSuspended(supplier)) throw new HttpError(409, `This ${what} isn’t on sale right now.`, 'NOT_ON_SALE');
   return [doc, supplier];
 }
 
 const fullName = (p) => `${p.firstName} ${p.lastName}`.replace(/\s+/g, ' ').trim();
 
 export async function quoteBooking(input, { userId, offerCode, now = Date.now() } = {}) {
-  const templates = await loadTemplates();
+  const [templates, limits] = await Promise.all([loadTemplates(), getPricingLimits()]);
   let priced;
   let draft;
   if (input.type === 'flight') {
     const [flight, supplier] = await load(Flight, input.itemId, 'flight');
-    priced = priceFlight(flight, supplier, input, { templates, now });
+    priced = priceFlight(flight, supplier, input, { templates, now, limits });
     draft = {
       type: 'flight',
       itemId: flight._id,
@@ -44,7 +46,7 @@ export async function quoteBooking(input, { userId, offerCode, now = Date.now() 
     };
   } else {
     const [hotel, supplier] = await load(Hotel, input.itemId, 'hotel');
-    priced = priceHotel(hotel, supplier, input, { templates, now });
+    priced = priceHotel(hotel, supplier, input, { templates, now, limits });
     draft = {
       type: 'hotel',
       itemId: hotel._id,

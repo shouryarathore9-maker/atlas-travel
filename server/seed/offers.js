@@ -4,8 +4,9 @@
 import mongoose from 'mongoose';
 import { addDays, todayIstString } from '../utils/dates.js';
 
-const img = (n) => `/images/seed/hotels/hotel-${n}.jpg`;
-const city = (c) => `/images/seed/cities/${c}.jpg`;
+// Offer artwork is themed (festivals, cabins, luggage), never a city or hotel photo, so an offer can't be
+// mistaken for a destination or a property (client/public/images/seed/offers).
+const art = (name) => `/images/seed/offers/${name}.jpg`;
 
 export function generateOffers({ suppliers, today = todayIstString() }) {
   const byName = Object.fromEntries(suppliers.map((s) => [s.name, s]));
@@ -21,7 +22,7 @@ export function generateOffers({ suppliers, today = todayIstString() }) {
       title: 'Welcome to Atlas',
       summary: '10% off your first three bookings, up to ₹1,500',
       description: 'A small thank-you for trying Atlas: 10% off the base fare or room charges on each of your first three bookings.',
-      image: img(7),
+      image: art('welcome'),
       scope: 'both',
       discountType: 'percent',
       value: 10,
@@ -37,7 +38,7 @@ export function generateOffers({ suppliers, today = todayIstString() }) {
       title: 'Fly for less',
       summary: '₹500 off flights over ₹4,000',
       description: 'A flat ₹500 off the base fare of any flight on Atlas when the fare comes to ₹4,000 or more.',
-      image: img(10),
+      image: art('plane-sky'),
       scope: 'flights',
       discountType: 'flat',
       value: 500,
@@ -45,19 +46,19 @@ export function generateOffers({ suppliers, today = todayIstString() }) {
       validFrom: addDays(today, -3),
       validTo: addDays(today, 45),
     }),
-    festive('navratri-getaways-2026', 'Navratri getaways', '8% off flights and stays during Navratri, up to ₹1,200', img(2), 8, 1200, '2026-09-27', '2026-10-21'),
-    festive('diwali-journeys-2026', 'Diwali journeys', '12% off trips home for Diwali, up to ₹2,000', img(5), 12, 2000, '2026-10-22', '2026-11-11'),
-    festive('sankranti-pongal-2027', 'Sankranti & Pongal', '8% off for the harvest festivals, up to ₹1,000', img(8), 8, 1000, '2026-12-30', '2027-01-17'),
-    festive('holi-2027', 'Holi weekend', '10% off for Holi, up to ₹1,200', img(11), 10, 1200, '2027-03-07', '2027-03-24'),
-    festive('navratri-getaways-2027', 'Navratri getaways', '8% off flights and stays during Navratri, up to ₹1,200', img(2), 8, 1200, '2027-09-15', '2027-10-10'),
-    festive('diwali-journeys-2027', 'Diwali journeys', '12% off trips home for Diwali, up to ₹2,000', img(5), 12, 2000, '2027-10-11', '2027-11-01'),
+    festive('navratri-getaways-2026', 'Navratri getaways', '8% off flights and stays during Navratri, up to ₹1,200', art('marigold'), 8, 1200, '2026-09-27', '2026-10-21'),
+    festive('diwali-journeys-2026', 'Diwali journeys', '12% off trips home for Diwali, up to ₹2,000', art('diya'), 12, 2000, '2026-10-22', '2026-11-11'),
+    festive('sankranti-pongal-2027', 'Sankranti & Pongal', '8% off for the harvest festivals, up to ₹1,000', art('kites'), 8, 1000, '2026-12-30', '2027-01-17'),
+    festive('holi-2027', 'Holi weekend', '10% off for Holi, up to ₹1,200', art('holi-colours'), 10, 1200, '2027-03-07', '2027-03-24'),
+    festive('navratri-getaways-2027', 'Navratri getaways', '8% off flights and stays during Navratri, up to ₹1,200', art('marigold'), 8, 1200, '2027-09-15', '2027-10-10'),
+    festive('diwali-journeys-2027', 'Diwali journeys', '12% off trips home for Diwali, up to ₹2,000', art('diya'), 12, 2000, '2027-10-11', '2027-11-01'),
     supplier('IndiGo', {
       slug: 'indigo-weekender',
       code: '6EWEEKEND',
       title: 'IndiGo weekender',
       summary: '7% off IndiGo flights, up to ₹800',
       description: 'Funded by IndiGo: 7% off the base fare on any IndiGo flight.',
-      image: img(12),
+      image: art('wing-sunset'),
       scope: 'flights',
       discountType: 'percent',
       value: 7,
@@ -72,7 +73,7 @@ export function generateOffers({ suppliers, today = todayIstString() }) {
       title: 'Air India business for less',
       summary: '₹2,500 off Air India business fares over ₹15,000',
       description: 'Funded by Air India: a flat ₹2,500 off business fares of ₹15,000 or more.',
-      image: img(9),
+      image: art('business-cabin'),
       scope: 'flights',
       discountType: 'flat',
       value: 2500,
@@ -87,7 +88,7 @@ export function generateOffers({ suppliers, today = todayIstString() }) {
       title: 'Sea views for less',
       summary: '15% off stays at The Marine Palm, up to ₹3,000',
       description: 'Funded by The Marine Palm: 15% off the room charges of any stay.',
-      image: img(4),
+      image: art('breakfast-tray'),
       scope: 'hotels',
       discountType: 'percent',
       value: 15,
@@ -102,7 +103,7 @@ export function generateOffers({ suppliers, today = todayIstString() }) {
       title: 'Longer stays at The Lodhi Courtyard',
       summary: '₹1,500 off stays over ₹15,000, applied automatically',
       description: 'Funded by The Lodhi Courtyard: ₹1,500 off the room charges when they come to ₹15,000 or more.',
-      image: img(1),
+      image: art('room-keys'),
       scope: 'hotels',
       discountType: 'flat',
       value: 1500,
@@ -115,7 +116,7 @@ export function generateOffers({ suppliers, today = todayIstString() }) {
       code: 'SUMMER15',
       title: 'Summer sale',
       summary: '15% off, up to ₹1,000 (this offer has ended)',
-      image: city('pune'),
+      image: art('summer-kit'),
       scope: 'both',
       discountType: 'percent',
       value: 15,
@@ -130,7 +131,7 @@ export function generateOffers({ suppliers, today = todayIstString() }) {
       code: 'FIRST50',
       title: 'The first fifty',
       summary: '₹750 off for the first 50 bookings (fully used)',
-      image: city('mumbai'),
+      image: art('gift'),
       scope: 'both',
       discountType: 'flat',
       value: 750,

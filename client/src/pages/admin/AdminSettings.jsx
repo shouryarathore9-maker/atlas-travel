@@ -60,7 +60,74 @@ function TemplateRow({ template, onSaved }) {
   );
 }
 
-// Commission rate and platform cancellation templates (prd.md → Workflows 26 and 32).
+const LIMIT_FIELDS = [
+  { path: ['maxMultiplier'], label: 'Highest multiplier (×)', step: '0.1', min: 1.2, max: 3 },
+  { path: ['flightFare', 'min'], label: 'Lowest flight fare (₹)', step: '50' },
+  { path: ['flightFare', 'max'], label: 'Highest flight fare (₹)', step: '50' },
+  { path: ['hotelNight', 'min'], label: 'Lowest room night (₹)', step: '50' },
+  { path: ['hotelNight', 'max'], label: 'Highest room night (₹)', step: '50' },
+];
+const getAt = (obj, [a, b]) => (b ? obj[a][b] : obj[a]);
+const setAt = (obj, [a, b], v) => (b ? { ...obj, [a]: { ...obj[a], [b]: v } } : { ...obj, [a]: v });
+
+// Platform-wide limits on supplier pricing inputs (prd.md → Admin console → Pricing limits).
+function PricingLimits({ onSaved }) {
+  const [form, setForm] = useState(null);
+  const [state, setState] = useState({ busy: false, errors: {}, message: null });
+  useEffect(() => {
+    adminApi
+      .pricingLimits()
+      .then(({ limits }) => setForm(limits))
+      .catch((e) => setState((s) => ({ ...s, message: e.message })));
+  }, []);
+  if (!form) return state.message ? <p className="field-error">{state.message}</p> : <Spinner />;
+
+  async function save(e) {
+    e.preventDefault();
+    setState({ busy: true, errors: {}, message: null });
+    const numeric = LIMIT_FIELDS.reduce((acc, f) => setAt(acc, f.path, Number(getAt(form, f.path))), form);
+    try {
+      const { limits } = await adminApi.savePricingLimits(numeric);
+      setForm(limits);
+      setState({ busy: false, errors: {}, message: null });
+      onSaved();
+    } catch (err) {
+      const errors = Object.fromEntries((err.details || []).map((d) => [d.path, d.message]));
+      setState({ busy: false, errors, message: err.details?.length ? null : err.message });
+    }
+  }
+
+  return (
+    <form className="card" onSubmit={save} noValidate>
+      <h2 className="h4">Pricing limits</h2>
+      <p className="small muted">
+        Guard rails for every supplier’s rate card, so a typo can’t produce an absurd price. Rate cards outside them can’t be saved, and the engine holds any price at the
+        limit straight away — even for cards saved before a change.
+      </p>
+      <div className="limits-grid">
+        {LIMIT_FIELDS.map((f) => (
+          <Field
+            key={f.path.join('.')}
+            label={f.label}
+            type="number"
+            step={f.step}
+            min={f.min}
+            max={f.max}
+            value={getAt(form, f.path)}
+            onChange={(e) => setForm(setAt(form, f.path, e.target.value))}
+            error={state.errors[f.path.join('.')]}
+          />
+        ))}
+      </div>
+      {state.message && <p className="field-error small">{state.message}</p>}
+      <button type="submit" className="btn btn-primary btn-sm" disabled={state.busy}>
+        {state.busy ? 'Saving…' : 'Save limits'}
+      </button>
+    </form>
+  );
+}
+
+// Commission rate, pricing limits and platform cancellation templates (prd.md → Workflows 26 and 32).
 export default function AdminSettings() {
   useDocumentTitle('Admin · Settings');
   const [rate, setRate] = useState(null);
@@ -111,6 +178,7 @@ export default function AdminSettings() {
           </button>
         </div>
       </form>
+      <PricingLimits onSaved={() => setNotice('Pricing limits saved. Search prices follow them straight away.')} />
       <section className="card">
         <h2 className="h4">Cancellation templates</h2>
         <p className="small muted">Suppliers pick from these for each fare tier or rate plan. Edits apply to future bookings only — booked trips keep the terms they agreed to.</p>

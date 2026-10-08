@@ -111,6 +111,8 @@ export const supplierApi = {
 export const adminApi = {
   audit: (query, opts) => api('/admin/audit', { query, ...opts }),
   suppliers: (opts) => api('/admin/suppliers', opts),
+  suspendSupplier: (id, reason) => api(`/admin/suppliers/${id}/suspend`, { method: 'POST', body: { reason } }),
+  reactivateSupplier: (id) => api(`/admin/suppliers/${id}/reactivate`, { method: 'POST' }),
   bookings: (query, opts) => api('/admin/bookings', { query, ...opts }),
   booking: (ref, opts) => api(`/admin/bookings/${encodeURIComponent(ref)}`, opts),
   specialRequests: (opts) => api('/admin/special-requests', opts),
@@ -124,4 +126,6 @@ export const adminApi = {
   saveTemplate: (key, body) => api(`/admin/templates/${key}`, { method: 'PUT', body }),
   commission: (opts) => api('/admin/settings/commission', opts),
   saveCommission: (rate) => api('/admin/settings/commission', { method: 'PUT', body: { rate } }),
+  pricingLimits: (opts) => api('/admin/settings/pricing-limits', opts),
+  savePricingLimits: (limits) => api('/admin/settings/pricing-limits', { method: 'PUT', body: limits }),
 };

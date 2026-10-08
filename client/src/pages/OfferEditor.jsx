@@ -7,16 +7,14 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle.js';
 import { errorLines } from '../lib/consoleForm.js';
 import { addDays, todayIst } from '../lib/dates.js';
 
-const IMAGES = [
-  ...Array.from({ length: 12 }, (_, i) => `/images/seed/hotels/hotel-${i + 1}.jpg`),
-  ...['delhi', 'mumbai', 'bengaluru', 'hyderabad', 'chennai', 'kolkata', 'pune', 'ahmedabad'].map((c) => `/images/seed/cities/${c}.jpg`),
-];
+// Mirrors OFFER_IMAGES on the server: themed offer artwork, never city or hotel photos.
+const IMAGES = ['welcome', 'plane-sky', 'wing-sunset', 'plane-landing', 'business-cabin', 'luggage', 'summer-kit', 'gift', 'marigold', 'diya', 'kites', 'holi-colours', 'breakfast-tray', 'room-keys'].map((n) => `/images/seed/offers/${n}.jpg`);
 
 const blank = (scope) => ({
   title: '',
   summary: '',
   description: '',
-  image: IMAGES[12],
+  image: IMAGES[0],
   auto: false,
   code: '',
   scope,

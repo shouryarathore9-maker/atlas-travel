@@ -1,6 +1,6 @@
 // Supplier pricing inputs and policies (prd.md → Supplier console → Pricing / Policies), plus the
 // admin's cancellation templates and commission rate. Every save is audit-logged with before/after.
-import { z } from 'zod';
+import { z, ZodError } from 'zod';
 import CancellationTemplate from '../models/CancellationTemplate.js';
 import Config, { getCommissionRate } from '../models/Config.js';
 import Hotel from '../models/Hotel.js';
@@ -10,6 +10,7 @@ import { AIRCRAFT, AIRCRAFT_KEYS, cabinSeats } from '../services/aircraft.js';
 import { audit } from '../services/audit.js';
 import { DEFAULT_MEALS, mealsFor } from '../services/bookingService.js';
 import { flightFare, hotelStay, routeKm } from '../services/pricing.js';
+import { getPricingLimits, limitIssues, pricingLimitsSchema } from '../services/pricingLimits.js';
 import { airlineRateCardSchema, hotelRateCardSchema } from '../services/rateCardSchema.js';
 import { rebuildServiceDepartures } from '../services/schedule.js';
 import { DEFAULT_TEMPLATES, describeTemplate, loadTemplates } from '../services/templates.js';
@@ -26,10 +27,19 @@ async function schemaFor(supplier) {
   return hotelRateCardSchema(hotel.roomTypes.map((r) => r.name), templateKeys('hotel'));
 }
 
+// The supplier's card, validated against its own rules and then against the platform limits.
+async function parseCard(supplier, body, limits) {
+  const card = (await schemaFor(supplier)).parse(body ?? {});
+  const issues = limitIssues(card, limits);
+  if (issues.length) throw new ZodError(issues);
+  return card;
+}
+
 export async function getRateCard(req, res) {
-  const templates = await loadTemplates();
+  const [templates, limits] = await Promise.all([loadTemplates(), getPricingLimits()]);
   res.json({
     rateCard: req.supplier.rateCard,
+    limits,
     templates: Object.values(templates)
       .filter((t) => t.kind === (req.supplier.kind === 'airline' ? 'flight' : 'hotel'))
       .map((t) => ({ key: t.key, name: t.name, terms: describeTemplate(t) })),
@@ -38,8 +48,7 @@ export async function getRateCard(req, res) {
 }
 
 export async function updateRateCard(req, res) {
-  const schema = await schemaFor(req.supplier);
-  const card = schema.parse(req.body.rateCard ?? {});
+  const card = await parseCard(req.supplier, req.body.rateCard, await getPricingLimits());
   const before = req.supplier.rateCard;
   const next = { ...card, version: (before?.version || 0) + 1 };
   await Supplier.updateOne({ _id: req.supplierId }, { $set: { rateCard: next } });
@@ -59,19 +68,19 @@ const hotelSample = z.object({ roomTypeName: z.string(), checkIn: dateString, ni
 
 // Prices a sample flight or stay with an unsaved rate card, so the manager sees the effect before saving.
 export async function previewRateCard(req, res) {
-  const schema = await schemaFor(req.supplier);
-  const card = schema.parse(req.body.rateCard ?? {});
+  const limits = await getPricingLimits();
+  const card = await parseCard(req.supplier, req.body.rateCard, limits);
   if (req.supplier.kind === 'airline') {
     const s = flightSample.parse(req.body.sample ?? {});
     const tier = card.tiers.find((t) => t.name === s.tier);
     if (!tier) throw new HttpError(400, 'Choose a fare tier', 'VALIDATION_ERROR');
     const departureTime = new Date(`${s.date}T${s.time}:00+05:30`);
-    const result = flightFare(card, { origin: s.origin, destination: s.destination, cabin: tier.cabin, tier, departureTime, load: s.loadPct / 100 });
+    const result = flightFare(card, { origin: s.origin, destination: s.destination, cabin: tier.cabin, tier, departureTime, load: s.loadPct / 100, limits });
     return res.json({ ...result, km: Math.round(routeKm(s.origin, s.destination)) });
   }
   const s = hotelSample.parse(req.body.sample ?? {});
   const plan = card.ratePlans.find((p) => p.key === s.ratePlan);
-  const stay = hotelStay(card, { roomTypeName: s.roomTypeName, checkIn: s.checkIn, checkOut: addDays(s.checkIn, s.nights), ratePlan: plan });
+  const stay = hotelStay(card, { roomTypeName: s.roomTypeName, checkIn: s.checkIn, checkOut: addDays(s.checkIn, s.nights), ratePlan: plan, limits });
   if (!stay) throw new HttpError(400, 'That room has no base rate yet', 'VALIDATION_ERROR');
   res.json(stay);
 }
@@ -176,4 +185,18 @@ export async function updateCommission(req, res) {
   await Config.updateOne({ key: 'commissionRate' }, { $set: { value: rate, updatedAt: new Date() } }, { upsert: true });
   await audit(req, { action: 'commission.update', target: { type: 'config', label: 'commissionRate' }, before: { rate: before }, after: { rate } });
   res.json({ rate });
+}
+
+// ---------- Platform pricing limits ----------
+
+export async function getLimits(req, res) {
+  res.json({ limits: await getPricingLimits() });
+}
+
+export async function updateLimits(req, res) {
+  const limits = pricingLimitsSchema.parse(req.body ?? {});
+  const before = await getPricingLimits();
+  await Config.updateOne({ key: 'pricingLimits' }, { $set: { value: limits, updatedAt: new Date() } }, { upsert: true });
+  await audit(req, { action: 'pricing_limits.update', target: { type: 'config', label: 'pricingLimits' }, before, after: limits });
+  res.json({ limits });
 }

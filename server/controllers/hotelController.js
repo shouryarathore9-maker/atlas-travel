@@ -5,6 +5,8 @@ import Review from '../models/Review.js';
 import Supplier from '../models/Supplier.js';
 import { roomFits } from '../services/bookingService.js';
 import { hotelStay } from '../services/pricing.js';
+import { getPricingLimits } from '../services/pricingLimits.js';
+import { hiddenSupplierFilter, isSuspended } from '../services/suppliers.js';
 import { describeTemplate, hasFreeWindow, loadTemplates } from '../services/templates.js';
 import { addDays, lastBookableDate, nightsBetween, todayIstString } from '../utils/dates.js';
 import { HttpError } from '../utils/httpError.js';
@@ -49,10 +51,10 @@ async function suppliersFor(hotels) {
 }
 
 // Every rate plan of a room type priced for a stay (night by night, one room).
-function pricedPlans(card, room, { checkIn, checkOut, now }, templates) {
+function pricedPlans(card, room, { checkIn, checkOut, now, limits }, templates) {
   return (card.ratePlans || [])
     .map((plan) => {
-      const stay = hotelStay(card, { roomTypeName: room.name, checkIn, checkOut, now, ratePlan: plan });
+      const stay = hotelStay(card, { roomTypeName: room.name, checkIn, checkOut, now, ratePlan: plan, limits });
       if (!stay) return null;
       const template = templates[plan.templateKey];
       return {
@@ -86,8 +88,8 @@ export async function searchHotels(req, res) {
       facets: { amenities: [], stars: [], minPrice: 0, maxPrice: 0 },
     });
   }
-  const candidates = await Hotel.find({ city: new RegExp(`^${escapeRegex(q.city)}$`, 'i'), salesStopped: { $ne: true } }).lean();
-  const [suppliers, templates] = await Promise.all([suppliersFor(candidates), loadTemplates()]);
+  const candidates = await Hotel.find({ city: new RegExp(`^${escapeRegex(q.city)}$`, 'i'), salesStopped: { $ne: true }, ...(await hiddenSupplierFilter()) }).lean();
+  const [suppliers, templates, limits] = await Promise.all([suppliersFor(candidates), loadTemplates(), getPricingLimits()]);
   const now = Date.now();
 
   const available = candidates
@@ -98,7 +100,7 @@ export async function searchHotels(req, res) {
       let best = null;
       let anyFree = false;
       for (const room of hotel.roomTypes.filter((r) => roomFits(r, q))) {
-        for (const plan of pricedPlans(card, room, { ...q, now }, templates)) {
+        for (const plan of pricedPlans(card, room, { ...q, now, limits }, templates)) {
           if (plan.freeCancellation) anyFree = true;
           if (!best || plan.avgNightly < best.plan.avgNightly) best = { room, plan };
         }
@@ -148,17 +150,19 @@ export async function getHotel(req, res) {
   const { checkIn: inDate, checkOut: outDate } = req.validated.query;
   const checkIn = inDate || addDays(todayIstString(), 1);
   const checkOut = outDate && outDate > checkIn ? outDate : addDays(checkIn, 2);
-  const [supplier, templates, reviews] = await Promise.all([
+  const [supplier, templates, reviews, limits] = await Promise.all([
     hotel.supplierId ? Supplier.findById(hotel.supplierId).lean() : null,
     loadTemplates(),
     Review.find({ itemType: 'hotel', itemId: hotel._id }).sort({ createdAt: -1 }).limit(5).lean(),
+    getPricingLimits(),
   ]);
+  if (isSuspended(supplier)) throw new HttpError(404, 'This hotel isn’t available on Atlas right now.', 'NOT_FOUND');
   const card = supplier?.rateCard?.kind ? supplier.rateCard : null;
   const now = Date.now();
   res.json({
     hotel: {
       ...hotel,
-      roomTypes: hotel.roomTypes.map((room) => ({ ...room, plans: card ? pricedPlans(card, room, { checkIn, checkOut, now }, templates) : [] })),
+      roomTypes: hotel.roomTypes.map((room) => ({ ...room, plans: card ? pricedPlans(card, room, { checkIn, checkOut, now, limits }, templates) : [] })),
     },
     stay: { checkIn, checkOut },
     breakfastPerGuest: card?.breakfastPerGuest || 0,
@@ -178,13 +182,14 @@ export async function listFeatured(req, res) {
   const { limit } = req.validated.query;
   const hotels = await Hotel.find({
     salesStopped: { $ne: true },
+    ...(await hiddenSupplierFilter()),
     starRating: { $gte: FEATURED_MIN_STARS },
     'rating.average': { $gte: FEATURED_MIN_RATING },
   })
     .sort({ 'rating.average': -1, starRating: -1, 'rating.count': -1, name: 1 })
     .limit(limit)
     .lean();
-  const [suppliers, templates] = await Promise.all([suppliersFor(hotels), loadTemplates()]);
+  const [suppliers, templates, limits] = await Promise.all([suppliersFor(hotels), loadTemplates(), getPricingLimits()]);
   const tonight = todayIstString();
   const tomorrow = addDays(tonight, 1);
   const now = Date.now();
@@ -194,7 +199,7 @@ export async function listFeatured(req, res) {
       const card = suppliers[String(h.supplierId)]?.rateCard;
       // "From" price: tonight's price for the cheapest room and rate plan, before taxes.
       const prices = card?.kind
-        ? h.roomTypes.flatMap((room) => pricedPlans(card, room, { checkIn: tonight, checkOut: tomorrow, now }, templates).map((p) => p.avgNightly))
+        ? h.roomTypes.flatMap((room) => pricedPlans(card, room, { checkIn: tonight, checkOut: tomorrow, now, limits }, templates).map((p) => p.avgNightly))
         : [];
       return {
         _id: h._id,

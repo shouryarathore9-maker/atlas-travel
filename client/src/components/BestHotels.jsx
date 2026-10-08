@@ -4,11 +4,14 @@ import StayCard from './StayCard.jsx';
 import { hotelsApi } from '../api/resources.js';
 import { useAsync } from '../hooks/useAsync.js';
 
-// Seed hotels share a small photo pool, so show each hotel's first photo not already used in this row.
+// Each card shows the hotelier's main (first) photo. Their own uploads always win; only when a shared
+// gallery photo is already in this row does the card fall back to the hotel's next chosen photo.
+const isUpload = (p) => p?.startsWith('/api/photos/');
 function withDistinctPhotos(hotels) {
   const used = new Set();
   return hotels.map((h) => {
-    const photo = h.photos?.find((p) => !used.has(p)) || h.photo;
+    const photos = h.photos?.length ? h.photos : [h.photo].filter(Boolean);
+    const photo = isUpload(photos[0]) ? photos[0] : photos.find((p) => isUpload(p) || !used.has(p)) || photos[0] || h.photo;
     used.add(photo);
     return { ...h, photo };
   });

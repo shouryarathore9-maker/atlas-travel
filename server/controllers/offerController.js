@@ -5,19 +5,18 @@ import crypto from 'node:crypto';
 import mongoose from 'mongoose';
 import { z } from 'zod';
 import Offer from '../models/Offer.js';
+import Supplier from '../models/Supplier.js';
 import { audit, snapshot } from '../services/audit.js';
 import { describeDiscount, FIRST_BOOKINGS_LIMIT } from '../services/offers.js';
-import { HOTEL_PHOTO_COUNT } from '../seed/data.js';
+import { hiddenSupplierFilter, isSuspended } from '../services/suppliers.js';
 import { todayIstString } from '../utils/dates.js';
 import { HttpError } from '../utils/httpError.js';
 import { dateString, pagination } from '../utils/query.js';
 import { slugify } from '../seed/generate.js';
 
 const inr = (n) => `₹${Math.round(n).toLocaleString('en-IN')}`;
-export const OFFER_IMAGES = [
-  ...Array.from({ length: HOTEL_PHOTO_COUNT }, (_, i) => `/images/seed/hotels/hotel-${i + 1}.jpg`),
-  ...['delhi', 'mumbai', 'bengaluru', 'hyderabad', 'chennai', 'kolkata', 'pune', 'ahmedabad'].map((c) => `/images/seed/cities/${c}.jpg`),
-];
+export const OFFER_ARTWORK = ['welcome', 'plane-sky', 'wing-sunset', 'plane-landing', 'business-cabin', 'luggage', 'summer-kit', 'gift', 'marigold', 'diya', 'kites', 'holi-colours', 'breakfast-tray', 'room-keys'];
+export const OFFER_IMAGES = OFFER_ARTWORK.map((n) => `/images/seed/offers/${n}.jpg`);
 
 // Plain-language terms generated from the offer's rules (never free-form legal text).
 export function offerTerms(o) {
@@ -66,7 +65,8 @@ export const publicListSchema = z.object({ product: z.enum(['flights', 'hotels']
 
 export async function listPublicOffers(req, res) {
   const { product, limit } = req.validated.query;
-  const filter = { ...activeFilter(todayIstString()), ...(product && { scope: { $in: [product, 'both'] } }) };
+  // A suspended supplier's own offers leave the public list with its listings.
+  const filter = { ...activeFilter(todayIstString()), ...(product && { scope: { $in: [product, 'both'] } }), ...(await hiddenSupplierFilter()) };
   const offers = await Offer.find(filter).sort({ funder: 1, validTo: 1 }).limit(limit).lean();
   res.json({ offers: offers.map(publicOffer) });
 }
@@ -75,7 +75,8 @@ export async function getPublicOffer(req, res) {
   const offer = await Offer.findOne({ slug: String(req.params.slug).slice(0, 80) }).lean();
   if (!offer) throw new HttpError(404, 'We could not find that offer.', 'NOT_FOUND');
   const today = todayIstString();
-  const live = offer.status === 'active' && offer.validFrom <= today && offer.validTo >= today;
+  const suspended = offer.supplierId ? isSuspended(await Supplier.findById(offer.supplierId, { status: 1 }).lean()) : false;
+  const live = !suspended && offer.status === 'active' && offer.validFrom <= today && offer.validTo >= today;
   // An ended, paused or used-up offer says so and shows no code.
   res.json({ offer: { ...publicOffer(offer), live, code: live ? offer.code : null } });
 }

@@ -11,10 +11,18 @@ const supplierSchema = new mongoose.Schema({
   slug: { type: String, required: true },
   rateCard: { type: mongoose.Schema.Types.Mixed, default: {} },
   policies: { type: mongoose.Schema.Types.Mixed, default: {} },
+  // Admin can suspend a supplier: its listings leave search, bookings stop and its manager can't sign in.
+  status: { type: String, enum: ['active', 'suspended'], default: 'active' },
+  suspension: {
+    reason: { type: String, default: '' },
+    at: { type: Date, default: null },
+    by: { type: String, default: '' },
+  },
 });
 
 supplierSchema.plugin(sandboxScope);
 supplierSchema.index({ sandboxId: 1, slug: 1 }, { unique: true });
 supplierSchema.index({ kind: 1, name: 1 });
+supplierSchema.index({ status: 1 });
 
 export default mongoose.model('Supplier', supplierSchema);

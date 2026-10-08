@@ -83,7 +83,7 @@ export function checkParty(travellers) {
 const tierFor = (supplier, fareType) => (supplier.rateCard?.tiers || []).find((t) => t.name === fareType);
 
 /** Prices a flight booking with the engine. Throws on anything that can't be booked. */
-export function priceFlight(flight, supplier, { fareType, travellers }, { templates, now = Date.now() }) {
+export function priceFlight(flight, supplier, { fareType, travellers }, { templates, now = Date.now(), limits }) {
   const tier = tierFor(supplier, fareType);
   assert(tier, 'That fare is no longer offered on this flight.');
   const cabin = flight.cabins?.[tier.cabin];
@@ -127,6 +127,7 @@ export function priceFlight(flight, supplier, { fareType, travellers }, { templa
     departureTime: flight.departureTime,
     now,
     load: cabin.capacity ? cabin.sold / cabin.capacity : 0,
+    limits,
   });
   const template = templates[tier.templateKey];
   assert(template, 'This fare’s cancellation terms are missing.', 'MISCONFIGURED');
@@ -155,7 +156,7 @@ export function roomFits(roomType, { adults, children, rooms }) {
   );
 }
 
-export function priceHotel(hotel, supplier, input, { templates, now = Date.now() }) {
+export function priceHotel(hotel, supplier, input, { templates, now = Date.now(), limits }) {
   const { roomTypeName, ratePlan: planKey = 'flexible', breakfast = false, rooms, checkIn, checkOut, adults, children } = input;
   const room = hotel.roomTypes.find((r) => r.name === roomTypeName);
   assert(room, 'That room type is no longer offered at this hotel.');
@@ -170,7 +171,7 @@ export function priceHotel(hotel, supplier, input, { templates, now = Date.now()
 
   const plan = (supplier.rateCard?.ratePlans || []).find((p) => p.key === planKey);
   assert(plan, 'That rate plan isn’t offered.');
-  const stay = hotelStay(supplier.rateCard, { roomTypeName, checkIn, checkOut, now, ratePlan: plan });
+  const stay = hotelStay(supplier.rateCard, { roomTypeName, checkIn, checkOut, now, ratePlan: plan, limits });
   assert(stay, 'This room has no rate set. Please choose another room.', 'MISCONFIGURED');
   const template = templates[plan.templateKey];
   assert(template, 'This rate plan’s cancellation terms are missing.', 'MISCONFIGURED');

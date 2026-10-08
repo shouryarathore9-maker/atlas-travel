@@ -1,7 +1,18 @@
 import { Router } from 'express';
-import { adminBookingsSchema, auditQuerySchema, getBooking, listAudit, listBookings, listSpecialRequests, listSuppliers } from '../controllers/adminController.js';
+import {
+  adminBookingsSchema,
+  auditQuerySchema,
+  getBooking,
+  listAudit,
+  listBookings,
+  listSpecialRequests,
+  listSuppliers,
+  reactivateSupplier,
+  suspendSchema,
+  suspendSupplier,
+} from '../controllers/adminController.js';
 import { adminOffers, offerInputSchema, offerListSchema } from '../controllers/offerController.js';
-import { getCommission, listTemplates, updateCommission, updateTemplate } from '../controllers/pricingController.js';
+import { getCommission, getLimits, listTemplates, updateCommission, updateLimits, updateTemplate } from '../controllers/pricingController.js';
 import { adminClose, adminEscalate, adminGet, adminList, adminListSchema, adminReply, escalateSchema, messageSchema } from '../controllers/ticketController.js';
 import { adminOnly, requireAuth } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
@@ -12,6 +23,8 @@ router.use(requireAuth, adminOnly);
 
 router.get('/audit', validate(auditQuerySchema, 'query'), listAudit);
 router.get('/suppliers', listSuppliers);
+router.post('/suppliers/:id/suspend', validate(suspendSchema), suspendSupplier);
+router.post('/suppliers/:id/reactivate', reactivateSupplier);
 
 router.get('/bookings', validate(adminBookingsSchema, 'query'), listBookings);
 router.get('/bookings/:ref', getBooking);
@@ -34,5 +47,7 @@ router.get('/templates', listTemplates);
 router.put('/templates/:key', updateTemplate);
 router.get('/settings/commission', getCommission);
 router.put('/settings/commission', updateCommission);
+router.get('/settings/pricing-limits', getLimits);
+router.put('/settings/pricing-limits', updateLimits);
 
 export default router;

@@ -31,3 +31,17 @@ Free to use under the [Unsplash License](https://unsplash.com/license). Download
 | hotels/hotel-10.jpg | [kzwWwsDUvas](https://unsplash.com/photos/kzwWwsDUvas) | [@hotellalgarhfortandpalace](https://unsplash.com/@hotellalgarhfortandpalace) |
 | hotels/hotel-11.jpg | [t6Le7895iuk](https://unsplash.com/photos/t6Le7895iuk) | [@ahmadajmi](https://unsplash.com/@ahmadajmi) |
 | hotels/hotel-12.jpg | [1CcryZiF2PA](https://unsplash.com/photos/1CcryZiF2PA) | [@stevenvanelk](https://unsplash.com/@stevenvanelk) |
+| offers/welcome.jpg | [TVllFyGaLEA](https://unsplash.com/photos/TVllFyGaLEA) | [@marissacristina](https://unsplash.com/@marissacristina) |
+| offers/plane-sky.jpg | [hSqGdDsr7gA](https://unsplash.com/photos/hSqGdDsr7gA) | [@_reettalreja_](https://unsplash.com/@_reettalreja_) |
+| offers/wing-sunset.jpg | [pWjJcw3c7Pk](https://unsplash.com/photos/pWjJcw3c7Pk) | [@sunify](https://unsplash.com/@sunify) |
+| offers/business-cabin.jpg | [n57AHgkaxyQ](https://unsplash.com/photos/n57AHgkaxyQ) | [@frugalflyer](https://unsplash.com/@frugalflyer) |
+| offers/marigold.jpg | [EEeGY0XgNSw](https://unsplash.com/photos/EEeGY0XgNSw) | [@najaratonajaria](https://unsplash.com/@najaratonajaria) |
+| offers/diya.jpg | [zNY2lVIRh7M](https://unsplash.com/photos/zNY2lVIRh7M) | [@dilipr_13](https://unsplash.com/@dilipr_13) |
+| offers/kites.jpg | [uCyX_xn8Y1I](https://unsplash.com/photos/uCyX_xn8Y1I) | [@poziomkaa](https://unsplash.com/@poziomkaa) |
+| offers/holi-colours.jpg | [7-3cGWyQlV0](https://unsplash.com/photos/7-3cGWyQlV0) | [@seitamaaphotography](https://unsplash.com/@seitamaaphotography) |
+| offers/breakfast-tray.jpg | [gtEzYq0B7-A](https://unsplash.com/photos/gtEzYq0B7-A) | [@corybjork](https://unsplash.com/@corybjork) |
+| offers/room-keys.jpg | [EDgZMOGc8LQ](https://unsplash.com/photos/EDgZMOGc8LQ) | [@tuan1561](https://unsplash.com/@tuan1561) |
+| offers/summer-kit.jpg | [GOZxrAlNIt4](https://unsplash.com/photos/GOZxrAlNIt4) | [@anete_lusina](https://unsplash.com/@anete_lusina) |
+| offers/gift.jpg | [f94JPVrDbnY](https://unsplash.com/photos/f94JPVrDbnY) | [@jessbaileydesigns](https://unsplash.com/@jessbaileydesigns) |
+| offers/plane-landing.jpg | [UYiesSO4FiM](https://unsplash.com/photos/UYiesSO4FiM) | [@zhpix](https://unsplash.com/@zhpix) |
+| offers/luggage.jpg | [ji5XMfO3dXY](https://unsplash.com/photos/ji5XMfO3dXY) | [@americangreentravel](https://unsplash.com/@americangreentravel) |

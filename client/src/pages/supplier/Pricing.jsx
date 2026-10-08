@@ -186,6 +186,12 @@ export default function Pricing() {
           Your rate card. Atlas’s pricing engine turns these rules into every price travellers see — prices are never typed in one by one. Changes apply to new bookings straight away;
           existing bookings keep what they paid. Version {card.version || 1}.
         </p>
+        {meta.limits && (
+          <p className="small muted">
+            Atlas limits: each multiplier at most ×{meta.limits.maxMultiplier}; fares {formatPrice(meta.limits.flightFare.min)}–{formatPrice(meta.limits.flightFare.max)} per traveller; hotel nights{' '}
+            {formatPrice(meta.limits.hotelNight.min)}–{formatPrice(meta.limits.hotelNight.max)} a room. Prices outside them are held at the limit.
+          </p>
+        )}
         {save.saved && (
           <Banner tone="success">
             <p>Saved. Search prices now follow your new rate card.</p>
@@ -394,11 +400,13 @@ export default function Pricing() {
             <p className="price">{formatPrice(preview.result.price)}</p>
             <p className="small muted">
               per traveller · base {formatPrice(preview.result.cabinBase)} · {preview.result.km} km
+              {preview.result.limited && ` · held at Atlas’s ${preview.result.limited === 'max' ? 'highest' : 'lowest'} fare`}
             </p>
             <ul className="small">
               {preview.result.factors.map((f) => (
                 <li key={f.rule}>
                   {f.rule}: ×{f.x}
+                  {f.capped && ' (Atlas’s limit)'}
                 </li>
               ))}
             </ul>
@@ -412,6 +420,7 @@ export default function Pricing() {
               {preview.result.nights.map((n) => (
                 <li key={n.date}>
                   {formatDateString(n.date, { weekday: 'short', year: undefined })}: {formatPrice(n.price)}
+                  {n.limited && ` (held at Atlas’s ${n.limited === 'max' ? 'highest' : 'lowest'} price)`}
                 </li>
               ))}
             </ul>

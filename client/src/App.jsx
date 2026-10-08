@@ -40,6 +40,7 @@ const AdminTicket = lazy(() => import('./pages/admin/AdminTicket.jsx'));
 const AdminSpecialRequests = lazy(() => import('./pages/admin/AdminSpecialRequests.jsx'));
 const AdminOffers = lazy(() => import('./pages/admin/AdminOffers.jsx'));
 const AdminSettings = lazy(() => import('./pages/admin/AdminSettings.jsx'));
+const AdminSuppliers = lazy(() => import('./pages/admin/AdminSuppliers.jsx'));
 const OfferEditor = lazy(() => import('./pages/OfferEditor.jsx'));
 const Documents = lazy(() => import('./pages/Documents.jsx'));
 const HelpTicket = lazy(() => import('./pages/HelpTicket.jsx'));
@@ -132,6 +133,7 @@ export default function App() {
             <Route path="offers" element={<AdminOffers />} />
             <Route path="offers/new" element={<OfferEditor scope="admin" />} />
             <Route path="offers/:id" element={<OfferEditor scope="admin" key="edit" />} />
+            <Route path="suppliers" element={<AdminSuppliers />} />
             <Route path="settings" element={<AdminSettings />} />
             <Route path="audit" element={<AuditLog />} />
           </Route>

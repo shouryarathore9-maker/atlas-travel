@@ -43,7 +43,7 @@ Build **Atlas**, a travel booking web app inspired by MakeMyTrip, Yatra, Ixigo a
 
 **Phase 2 — Marketplace (this release)**
 - **Supplier consoles** for airline and hotel managers: overview, catalogue, pricing inputs (rate card), policies, reservations/passenger lists, special requests, offers, settlement statements
-- **Admin console** becomes oversight: analytics dashboard, all bookings, tickets, special requests, offers (platform offers + kill switch), commission, cancellation templates, settlement, audit log. The Phase 1 admin inventory editor is removed (inventory moves to the managers).
+- **Admin console** becomes oversight: analytics dashboard, all bookings, tickets, special requests, offers (platform offers + kill switch), commission, cancellation templates, platform pricing limits, supplier suspension, settlement, audit log. The Phase 1 admin inventory editor is removed (inventory moves to the managers).
 - **Rules-based pricing engine** with one rate card per airline and per hotel; prices are never typed per flight or room
 - **Platform cancellation templates** that fare tiers and rate plans pick from
 - **Supplier-initiated cancellations and reschedules** with automatic full refunds, receipts and notifications
@@ -232,9 +232,11 @@ Every page shows only the manager's own airline or hotel. Every change applies t
 - **Bookings:** every booking, searchable by reference, email, supplier and status; a read-only detail view (travellers, payment, offer and funder, special request and reply, cancellation, tickets). No edits and no manual refunds.
 - **Tickets:** all help tickets and statement queries with status filters; **Reply**, **Close** (without reply) or **Escalate to supplier** for booking problems; **Resolve** statement queries as **No change** or **Adjustment** (amount and note).
 - **Special requests:** a read-only list of every request and the supplier's reply.
+- **Suppliers:** every airline and hotel with its manager, upcoming bookings and status. **Suspend** (a reason of 5–300 characters is required) hides the supplier's flights or hotel from search, the featured list and detail pages, hides its own offers, refuses new quotes and payments ("isn't on sale right now"), signs its manager out and refuses their sign-in ("Your organisation's Atlas account is suspended. Please contact Atlas support." — shown only after a correct password). Existing bookings are untouched: travellers keep them, can view documents, check in and cancel under their frozen terms, and supplier-cancellation jobs already running still finish. **Reactivate** reverses it straight away. Both actions are audit-logged with the reason.
 - **Offers:** all offers (platform and supplier) with redemptions and discount by funder; **Create / Edit** platform offers; **Pause / Resume** any offer (the kill switch).
 - **Settlement:** every supplier's statements; **Mark as paid** with a mock payment reference.
-- **Settings:** the platform **commission rate** (future statements only) and the **cancellation templates** (future bookings only).
+- **Settings:** the platform **commission rate** (future statements only), the **pricing limits** (below) and the **cancellation templates** (future bookings only).
+- **Pricing limits (one platform setting):** a ceiling on every rate-card multiplier (default **×2.0**; admin can set ×1.2–×3.0) and absolute price bounds — flights **₹1,000–₹75,000** per adult/child seat before taxes, hotels **₹500–₹1,50,000** per room per night before taxes (multiples of ₹50). A rate card that breaks them can't be saved (the error names the field); the engine also holds every multiplier and final price inside them at run time, so a change applies at once, even to cards saved earlier. Managers see the limits on their Pricing page and in the preview. Changes are audit-logged.
 - **Audit log:** who changed what and when, with before and after, filterable by actor, supplier and action.
 - Accounts that aren't admins are turned away with "That area is for administrators only."
 
@@ -474,7 +476,7 @@ Full coverage of every feature — `AGENTS.md`'s Definition of Done checks a fea
 - User registration, login, logout, session persistence; notifications
 - My trips: list, view detail, cancel (with simulated refund calculation), reschedule response, help tickets
 - Supplier consoles: catalogue, departures, rate card, policies, reservations, special requests, offers, statements
-- Admin console: analytics, bookings, tickets, special requests, offers, settlement, commission, templates, audit log
+- Admin console: analytics, bookings, tickets, special requests, offers, suppliers (suspend/reactivate), settlement, commission, pricing limits, templates, audit log
 - Visitor sandbox for supplier and admin consoles
 - Homepage discovery: offers, featured destinations and best hotels, each with "View all"
 
@@ -599,6 +601,8 @@ These were flagged as open questions; each now has a default decision so nothing
 24. **Rate card editing:** a fixed rule set; managers edit values, switch optional rules on/off (off = ×1.0) and add/remove entries in list-type rules, all validated. No custom rule builder.
 25. **Hotel photo uploads (owner request, overrides the spec's "no file uploads"):** hotel managers may upload up to 4 photos (JPEG/PNG/WebP, ≤ 350 KB after in-browser resizing), stored in MongoDB and served from Atlas with long caching; files are checked by their first bytes; unused uploads are deleted after a day. Sandboxes don't get uploads. Worst case ≈ 67 MB for all 48 hotels — measured and reported.
 26. **Bell jingle and chime (owner request):** see Global → New notification.
+27. **Supplier suspension (owner request):** see Admin console → Suppliers. Suspension is all-or-nothing per supplier (no partial suspension of one route or room type — managers already have Stop sales for that). The manager isn't sent a notification (they can't sign in to read it); the reason lives in the audit log.
+28. **Pricing limits (owner request), chosen defaults:** multiplier ceiling ×2.0 (the default rate cards peak at ×1.5); flight fare ₹1,000–₹75,000 (the dearest seeded business fare at its guard-rail ceiling is about ₹63,000; the cheapest seeded economy fare about ₹1,700); hotel night ₹500–₹1,50,000. The structural business-cabin ratio (×1.5–×6) and airline factor (×0.5–×2) keep their own fixed bounds; at save time Atlas also checks that the base fare of every route (economy) and of the longest route (business) falls inside the fare bounds, which catches typos such as ₹340 per km.
 
 **Phase 2 assumptions from the spec, confirmed as written:** funding and commission rules (Settlement); no convenience fee exists — confirmed in code (flight taxes are 12% of the base fare; hotel taxes are seeded per room per night; neither includes an Atlas charge), so the label becomes "Taxes"; tax recomputed on the discounted base; redemption restored only on supplier cancellation; a typed code replaces an automatic offer; validity dates are booking dates; first-3-bookings excludes supplier-cancelled bookings; no offer badges in results; the admin kill switch is not moderation; build order platform offers first, then supplier offers and the funding split; Saturday ×1.05; commission 10%; special requests visible to admin read-only and supplier replies audit-logged; take rate on completed bookings; sandbox hotels from the best-hotels set; sandbox admin actions affect only the sandbox.
 

@@ -8,6 +8,15 @@ export const ENGINE_VERSION = 1;
 export const FLIGHT_TAX_RATE = 0.12;
 export const INFANT_FEE = 1500;
 
+// Platform-wide limits on supplier pricing inputs (admin → Settings; stored as Config 'pricingLimits').
+// maxMultiplier caps every rule multiplier (bands, days of week, seasons, route overrides, fare tiers,
+// rate plans); the fare bounds cap the engine's final price, so a typo can't produce a ₹1 or ₹1,00,000 fare.
+export const DEFAULT_PRICING_LIMITS = {
+  maxMultiplier: 2,
+  flightFare: { min: 1000, max: 75000 }, // one adult/child seat, any cabin, before taxes
+  hotelNight: { min: 500, max: 150000 }, // one room for one night, before taxes
+};
+
 const DAY_MS = 24 * 3600 * 1000;
 const IST_OFFSET_MS = 5.5 * 3600 * 1000;
 const round50 = (n) => Math.round(n / 50) * 50;
@@ -149,7 +158,15 @@ export function defaultHotelRateCard({ baseRates, starRating = 4, flexibleTempla
  * Price of one adult/child seat on a fare tier.
  * @returns {{ price, cabinBase, factors: [{ rule, x }] }}
  */
-export function flightFare(card, { origin, destination, cabin, tier, departureTime, now = Date.now(), load = 0 }) {
+const capFactors = (factors, max) => factors.map((f) => (f.x > max ? { ...f, x: max, capped: true } : f));
+
+// Final price within the platform's bounds; `limited` says which bound applied, if any.
+function bounded(raw, { min, max }) {
+  const price = clamp(round50(raw), min, max);
+  return { price, limited: price === max && raw > max ? 'max' : price === min && raw < min ? 'min' : null };
+}
+
+export function flightFare(card, { origin, destination, cabin, tier, departureTime, now = Date.now(), load = 0, limits = DEFAULT_PRICING_LIMITS }) {
   const today = istDate(now);
   const depDate = istDate(departureTime);
   const override = card.routeOverrides?.enabled
@@ -159,45 +176,46 @@ export function flightFare(card, { origin, destination, cabin, tier, departureTi
     ? override.fixedBase
     : (variableValue(card.base.fixed, today) + variableValue(card.base.perKm, today) * routeKm(origin, destination)) *
       (card.base.airlineFactor ?? 1);
-  const cabinBase = economyBase * (cabin === 'business' ? card.base.businessMultiplier : 1) * (override?.multiplier ?? 1);
+  const cabinBase = economyBase * (cabin === 'business' ? card.base.businessMultiplier : 1) * Math.min(override?.multiplier ?? 1, limits.maxMultiplier);
   const season = seasonFor(card.seasons, depDate);
-  const factors = [
+  const factors = capFactors([
     { rule: 'Time of day', x: bandFactor(card.timeOfDay, istMinuteOfDay(departureTime)) },
     season ? { rule: `Season: ${season.name}`, x: season.x } : { rule: 'Day of week', x: dayFactor(card.dayOfWeek, depDate) },
     { rule: 'Days to departure', x: bandFactor(card.daysToDeparture, Math.max(0, daysBetween(today, depDate))) },
     { rule: 'Demand', x: bandFactor(card.demand, Math.floor(clamp(load, 0, 1) * 100)) },
     { rule: `${tier.name} fare`, x: tier.x },
-  ];
+  ], limits.maxMultiplier);
   const raw = factors.reduce((p, f) => p * f.x, cabinBase);
-  const price = round50(clamp(raw, card.guardRails.floor * cabinBase, card.guardRails.ceiling * cabinBase));
-  return { price, cabinBase: Math.round(cabinBase), factors };
+  const { price, limited } = bounded(clamp(raw, card.guardRails.floor * cabinBase, card.guardRails.ceiling * cabinBase), limits.flightFare);
+  return { price, cabinBase: Math.round(cabinBase), factors, limited };
 }
 
 export const tiersForCabin = (card, cabin) => (card.tiers || []).filter((t) => t.cabin === cabin);
 
 // ---------- Hotels ----------
 
-export function hotelNight(card, { roomTypeName, date, now = Date.now(), ratePlan, checkIn = date }) {
+export function hotelNight(card, { roomTypeName, date, now = Date.now(), ratePlan, checkIn = date, limits = DEFAULT_PRICING_LIMITS }) {
   const base = card.baseRates?.[roomTypeName];
   if (!base) return null;
   const season = seasonFor(card.seasons, date);
-  const factors = [
+  const factors = capFactors([
     season ? { rule: `Season: ${season.name}`, x: season.x } : { rule: 'Day of week', x: dayFactor(card.dayOfWeek, date) },
     { rule: 'Lead time', x: bandFactor(card.leadTime, Math.max(0, daysBetween(istDate(now), checkIn))) },
     { rule: `${ratePlan.name} rate`, x: ratePlan.x },
-  ];
+  ], limits.maxMultiplier);
   const raw = factors.reduce((p, f) => p * f.x, base);
-  return { price: round50(clamp(raw, card.guardRails.floor * base, card.guardRails.ceiling * base)), base, factors };
+  const { price, limited } = bounded(clamp(raw, card.guardRails.floor * base, card.guardRails.ceiling * base), limits.hotelNight);
+  return { price, base, factors, limited };
 }
 
 /** Night-by-night price of one room for a stay. */
-export function hotelStay(card, { roomTypeName, checkIn, checkOut, now = Date.now(), ratePlan }) {
+export function hotelStay(card, { roomTypeName, checkIn, checkOut, now = Date.now(), ratePlan, limits = DEFAULT_PRICING_LIMITS }) {
   const nights = [];
   for (let i = 0; i < daysBetween(checkIn, checkOut); i++) {
     const date = new Date(Date.parse(`${checkIn}T00:00:00Z`) + i * DAY_MS).toISOString().slice(0, 10);
-    const night = hotelNight(card, { roomTypeName, date, now, ratePlan, checkIn });
+    const night = hotelNight(card, { roomTypeName, date, now, ratePlan, checkIn, limits });
     if (!night) return null;
-    nights.push({ date, price: night.price });
+    nights.push({ date, price: night.price, ...(night.limited && { limited: night.limited }) });
   }
   const perRoom = nights.reduce((s, n) => s + n.price, 0);
   return { nights, perRoom, avgNightly: nights.length ? Math.round(perRoom / nights.length) : 0 };

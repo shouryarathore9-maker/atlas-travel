@@ -77,6 +77,8 @@ Phase 1 models as built, with the Phase 2 changes logged in **Phase 2 Data-Model
     breakfastPerGuest
   },
   salesStopped: Boolean,
+  status:     'active' | 'suspended',  // admin suspension (default active)
+  suspension: { reason, at, by },      // cleared on reactivation
   sandboxId, sandboxExpiresAt
 }
 ```
@@ -211,7 +213,7 @@ One generic `Booking` collection with a `type` discriminator, rather than separa
 ```
 
 ### Config *(Phase 2)*
-`{ key: 'commissionRate', value: 0.10, sandboxId }`
+`{ key: 'commissionRate', value: 0.10, sandboxId }` and `{ key: 'pricingLimits', value: { maxMultiplier: 2, flightFare: { min: 1000, max: 75000 }, hotelNight: { min: 500, max: 150000 } } }` (defaults in code, `DEFAULT_PRICING_LIMITS`, when the document is absent).
 
 ### Notification *(Phase 2)*
 `{ userId, type, title, body, link, readAt, createdAt, sandboxId }` — TTL 90 days on `createdAt`; at most 200 per user (oldest trimmed by the daily job).
@@ -291,7 +293,8 @@ Adjustment { supplierId, amount, note, ticketId, statementId /* applied in */, c
 | GET | `/api/admin/special-requests` | Read-only list | Admin |
 | GET/POST/PUT | `/api/admin/offers[/:id]`, `/:id/{pause,resume}` | Platform offers; kill switch on any offer | Admin |
 | GET/POST | `/api/admin/statements`, `/:id/mark-paid` | Settlement | Admin |
-| GET/PUT | `/api/admin/settings/commission`, `/api/admin/templates[/:key]` | Commission; cancellation templates | Admin |
+| GET/PUT | `/api/admin/settings/commission`, `/api/admin/settings/pricing-limits`, `/api/admin/templates[/:key]` | Commission; pricing limits; cancellation templates | Admin |
+| GET/POST | `/api/admin/suppliers`, `/:id/suspend` (`{ reason }`), `/:id/reactivate` | Suppliers with manager, upcoming bookings and status; suspend/reactivate | Admin |
 | GET | `/api/admin/audit` | Audit log | Admin |
 | POST/DELETE | `/api/sandbox`, POST `/api/sandbox/switch` | Start/end a sandbox; switch to the demo traveller | Public (rate-limited) / Sandbox |
 | * | `/api/sandbox/{supplier,admin,traveller}/*` | The same routers, sandbox-scoped | Sandbox only |
@@ -434,15 +437,16 @@ season    = seasons matching the departure date (IST)
 raw       = cabinBase × timeOfDay(departure) × (season ? season.x : dayOfWeek(departure))
                      × daysToDeparture(days between booking date and departure date, IST)
                      × demand(cabin.sold / cabin.capacity) × tier.x
-price     = round50(clamp(raw, guardRails.floor × cabinBase, guardRails.ceiling × cabinBase))
+price     = clamp(round50(clamp(raw, guardRails.floor × cabinBase, guardRails.ceiling × cabinBase)), limits.flightFare.min, limits.flightFare.max)
 ```
+Every rule factor (and a route override's multiplier) is first capped at `limits.maxMultiplier` (platform pricing limits, Config `pricingLimits`); results carry `limited: 'min' | 'max' | null` and capped factors are flagged, for the manager's preview.
 Taxes = round(12% × (fare × payingTravellers − discount)). Infant fee ₹1,500 flat, untaxed, undiscounted. Seat fees and meal prices from the rate card/policies.
 
 **Hotel night (per room):**
 ```
 base   = baseRates[roomType]
 raw    = base × (season(night) ? season.x : dayOfWeek(night)) × leadTime(days from booking date to check-in) × ratePlan.x
-night  = round50(clamp(raw, floor × base, ceiling × base))
+night  = clamp(round50(clamp(raw, floor × base, ceiling × base)), limits.hotelNight.min, limits.hotelNight.max)   // factors capped at limits.maxMultiplier
 stay   = Σ nights × rooms;   breakfast = perGuest × guests × nights (room-only rooms, if added)
 taxes  = taxesAndFees × rooms × nights     (fixed; unaffected by discounts)
 ```
@@ -537,9 +541,14 @@ Stages 2–5 (pricing, traveller documents, supplier operations, offers):
 13. **Hotel photo uploads** (owner request): new `photos` collection (`supplierId`, `hotelId`, `contentType`, `size`, `data`); `GET /api/photos/:id` serves them publicly with `Content-Type` from the sniffed bytes, `nosniff`, a `default-src 'none'; sandbox` CSP and a one-year immutable cache; `GET/POST/DELETE /api/supplier/hotel/photos`. Hotel `photos[]` accepts gallery paths or the hotel's own `/api/photos/<id>` URLs, up to 6.
 14. **Templates text:** a template without a free window reads "No free cancellation — cancelling costs …".
 
+Owner-requested admin powers:
+15. **Supplier suspension:** `Supplier.status` + `suspension`. Listings are hidden with a `supplierId: { $nin: suspendedIds }` filter (one small indexed query per search) rather than flags copied onto every flight/hotel, so reactivation is instant and nothing can drift. Detail pages of a suspended supplier return 404; `quoteBooking` refuses with `409 NOT_ON_SALE`; `requireAuth` returns `403 SUPPLIER_SUSPENDED` and clears the cookie for its manager, `optionalAuth` treats them as signed out, and login answers 403 only after the password matches. Admin audit entries carry the target `supplierId` (the `audit()` helper takes an explicit `supplierId`).
+16. **Pricing limits:** `services/pricingLimits.js` (zod schema for admin, `getPricingLimits()`, `limitIssues(card, limits)` run after the card's own schema on save and preview). Every engine caller loads the limits once per request and passes them in; the engine stays pure (`limits` defaults to `DEFAULT_PRICING_LIMITS`).
+
 ## Phase 2 Data-Model Changes (logged per AGENTS.md)
 1. **User:** `role` gains `airline_manager` and `hotel_manager`; adds `supplierId`; `savedTravellers` becomes `{ firstName, lastName, ageCategory }` (≤ 20); adds `sandboxId`.
-2. **New collections:** `suppliers`, `services`, `offers` (replaces the unused `coupons` stub, which is dropped), `cancellationtemplates`, `configs`, `notifications`, `auditlogs`, `tickets`, `statements`, `adjustments`, `events`, `dailystats`, `sandboxes`, `photos` (hotel uploads).
+2. **Supplier** adds `status` and `suspension` (owner request, deviation 15).
+2a. **New collections:** `suppliers`, `services`, `offers` (replaces the unused `coupons` stub, which is dropped), `cancellationtemplates`, `configs`, `notifications`, `auditlogs`, `tickets`, `statements`, `adjustments`, `events`, `dailystats`, `sandboxes`, `photos` (hotel uploads).
 3. **Flight:** adds `supplierId`, `serviceId`, `date`, `aircraftConfig`, `cabins`, `status`, `salesStopped`, `scheduleChange`, `cancellationJob`, `checkInSeq`, `seatMap.blockedSeats`, sandbox fields; **removes** `fareOptions` (tiers, baggage and templates now come from the rate card), `mealOptions` (supplier policies) and `seatMap.rows/columns/seatPricing` (aircraft catalogue and rate card). Unique index `(serviceId, date)`.
 4. **Hotel:** adds `supplierId`, `salesStopped`, `roomTypes[].roomsTotal`, `roomTypes[].salesStopped`, sandbox fields; **removes** `roomTypes[].price` (rate card) and `roomTypes[].cancellationPolicy` (templates).
 5. **Review:** `itemType` `'flight'` becomes `'service'` (reviews per service).

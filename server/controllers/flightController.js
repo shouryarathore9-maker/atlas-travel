@@ -6,6 +6,8 @@ import Supplier from '../models/Supplier.js';
 import { AIRCRAFT, hasCabin } from '../services/aircraft.js';
 import { mealsFor, seatInfo } from '../services/bookingService.js';
 import { FLIGHT_TAX_RATE, flightFare, INFANT_FEE, tiersForCabin } from '../services/pricing.js';
+import { getPricingLimits } from '../services/pricingLimits.js';
+import { hiddenSupplierFilter, isSuspended } from '../services/suppliers.js';
 import { describeTemplate, loadTemplates } from '../services/templates.js';
 import { istDayRange, IST_OFFSET_MS, lastBookableDate } from '../utils/dates.js';
 import { HttpError } from '../utils/httpError.js';
@@ -69,7 +71,7 @@ async function suppliersFor(items) {
 const loadOf = (cabin) => (cabin.capacity ? cabin.sold / cabin.capacity : 0);
 
 // Lowest engine price for the cabin on a departure, or null if it can't seat the party.
-function lowestFare(flight, supplier, cabinName, seatsNeeded, now) {
+function lowestFare(flight, supplier, cabinName, seatsNeeded, now, limits) {
   const cabin = flight.cabins?.[cabinName];
   if (!supplier?.rateCard?.kind || !cabin || cabin.capacity - cabin.sold < seatsNeeded) return null;
   const prices = tiersForCabin(supplier.rateCard, cabinName).map((tier) => ({
@@ -82,6 +84,7 @@ function lowestFare(flight, supplier, cabinName, seatsNeeded, now) {
       departureTime: flight.departureTime,
       now,
       load: loadOf(cabin),
+      limits,
     }).price,
   }));
   return prices.length ? prices.reduce((min, p) => (p.price < min.price ? p : min)) : null;
@@ -102,17 +105,18 @@ export async function searchFlights(req, res) {
     departureTime: { $gte: start, $lt: end },
     status: 'scheduled',
     salesStopped: { $ne: true },
+    ...(await hiddenSupplierFilter()),
   })
     .select('-seatMap')
     .lean();
-  const suppliers = await suppliersFor(candidates);
+  const [suppliers, limits] = await Promise.all([suppliersFor(candidates), getPricingLimits()]);
   const now = Date.now();
   const seatsNeeded = q.adults + q.children;
 
   const available = candidates
     .map((flight) => {
       if (flight.departureTime <= new Date(now)) return null;
-      const fare = lowestFare(flight, suppliers[String(flight.supplierId)], q.cabin, seatsNeeded, now);
+      const fare = lowestFare(flight, suppliers[String(flight.supplierId)], q.cabin, seatsNeeded, now, limits);
       if (!fare) return null;
       return {
         _id: flight._id,
@@ -170,11 +174,14 @@ export async function getFlight(req, res) {
   const q = req.validated.query;
   const flight = await Flight.findById(req.params.id).lean();
   if (!flight) throw new HttpError(404, 'We could not find that flight.', 'NOT_FOUND');
-  const [supplier, templates, reviews] = await Promise.all([
+  const [supplier, templates, reviews, limits] = await Promise.all([
     flight.supplierId ? Supplier.findById(flight.supplierId).lean() : null,
     loadTemplates(),
     Review.find(reviewTarget(flight)).sort({ createdAt: -1 }).limit(5).lean(),
+    getPricingLimits(),
   ]);
+  // A suspended airline's departures are off Atlas until admin reactivates it.
+  if (isSuspended(supplier)) throw new HttpError(404, 'This flight isn’t available on Atlas right now.', 'NOT_FOUND');
   const now = Date.now();
   const cabinName = hasCabin(flight.aircraftConfig, q.cabin) ? q.cabin : null;
   const cabin = cabinName ? flight.cabins[cabinName] : null;
@@ -184,7 +191,7 @@ export async function getFlight(req, res) {
   const tiers = card && cabin
     ? tiersForCabin(card, cabinName).map((tier) => ({
         name: tier.name,
-        price: flightFare(card, { origin: flight.origin.code, destination: flight.destination.code, cabin: cabinName, tier, departureTime: flight.departureTime, now, load: loadOf(cabin) }).price,
+        price: flightFare(card, { origin: flight.origin.code, destination: flight.destination.code, cabin: cabinName, tier, departureTime: flight.departureTime, now, load: loadOf(cabin), limits }).price,
         cabinBaggageKg: tier.cabinBaggageKg,
         checkinBaggageKg: tier.checkinBaggageKg,
         dateChangeFee: tier.dateChangeFee,
