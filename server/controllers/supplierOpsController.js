@@ -60,11 +60,12 @@ export async function cancelDeparture(req, res) {
   const confirmed = await Booking.find({ type: 'flight', itemId: flight._id, status: 'confirmed' }, { fareBreakdown: 1 }).lean();
   if (flight.status !== 'cancelled') {
     // Cancel first (so nobody can book it), then refund in batches; the daily job finishes an interrupted run.
-    await Flight.updateOne(
+    const claimed = await Flight.updateOne(
       { _id: flight._id, status: 'scheduled' },
       { $set: { status: 'cancelled', cancellationJob: { state: 'pending', reason: req.validated.body.reason, startedAt: new Date(), processed: 0 } } },
     );
-    await audit(req, {
+    // A double-click or retry: only the request that actually cancelled it writes the audit entry.
+    if (claimed.modifiedCount) await audit(req, {
       action: 'departure.cancel',
       target: { type: 'flight', id: flight._id, label: `${flight.flightNumber} ${flight.date}` },
       before: { status: 'scheduled' },

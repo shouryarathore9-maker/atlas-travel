@@ -55,7 +55,7 @@ export async function queryLine(req, res) {
   const ref = String(req.params.ref).toUpperCase().slice(0, 12);
   const line = statement.lines.find((l) => l.bookingReference === ref);
   if (!line) throw new HttpError(404, 'That booking isn’t on this statement.', 'NOT_FOUND');
-  if (await Ticket.exists({ type: 'statement_query', statementId: statement._id, bookingReference: ref, status: { $ne: 'resolved' } })) {
+  if (await Ticket.exists({ type: 'statement_query', statementId: statement._id, bookingReference: ref, status: { $nin: ['resolved', 'closed'] } })) {
     throw new HttpError(409, 'There’s already an open query on this line.', 'QUERY_EXISTS');
   }
   await useSandboxQuota('docs');
@@ -162,17 +162,18 @@ export async function resolveQuery(req, res) {
   const { outcome, amount, note } = req.validated.body;
   const statement = await Statement.findById(ticket.statementId, { period: 1 }).lean();
 
-  let adjustment = null;
-  if (outcome === 'adjustment') {
-    adjustment = await Adjustment.create({ supplierId: ticket.supplierId, amount, note, ticketId: ticket._id, bookingReference: ticket.bookingReference, fromStatementId: ticket.statementId });
-  }
+  // Claim the query atomically first, so a double-click can never create two adjustments.
   const now = new Date();
-  ticket.messages.push({ authorRole: 'admin', authorName: 'Atlas support', body: outcome === 'adjustment' ? `Adjustment of ₹${amount.toLocaleString('en-IN')} on your next statement: ${note}` : `No change: ${note}` });
-  ticket.status = 'resolved';
-  ticket.resolution = { kind: outcome, amount: adjustment ? amount : 0, note };
-  ticket.updatedAt = now;
-  ticket.closedAt = now;
-  await ticket.save();
+  const message = { authorRole: 'admin', authorName: 'Atlas support', body: outcome === 'adjustment' ? `Adjustment of ₹${amount.toLocaleString('en-IN')} on your next statement: ${note}` : `No change: ${note}`, at: now };
+  const claimed = await Ticket.findOneAndUpdate(
+    { _id: ticket._id, type: 'statement_query', status: { $ne: 'resolved' } },
+    { $set: { status: 'resolved', resolution: { kind: outcome, amount: outcome === 'adjustment' ? amount : 0, note }, updatedAt: now, closedAt: now }, $push: { messages: message } },
+    { returnDocument: 'after' },
+  ).lean();
+  if (!claimed) throw new HttpError(409, 'This query is already resolved.', 'TICKET_CLOSED');
+  if (outcome === 'adjustment') {
+    await Adjustment.create({ supplierId: ticket.supplierId, amount, note, ticketId: ticket._id, bookingReference: ticket.bookingReference, fromStatementId: ticket.statementId });
+  }
 
   await notifySupplier(ticket.supplierId, {
     type: 'statement.query_answered',
@@ -184,7 +185,7 @@ export async function resolveQuery(req, res) {
     action: outcome === 'adjustment' ? 'statement.adjustment' : 'statement.query_resolved',
     target: { type: 'ticket', id: ticket._id, label: `Query ${ticket.bookingReference}` },
     supplierId: ticket.supplierId,
-    after: { outcome, amount: adjustment ? amount : 0, note },
+    after: { outcome, amount: outcome === 'adjustment' ? amount : 0, note },
   });
-  res.json({ ticket: { ...ticket.toObject(), canReply: false } });
+  res.json({ ticket: { ...claimed, canReply: false } });
 }

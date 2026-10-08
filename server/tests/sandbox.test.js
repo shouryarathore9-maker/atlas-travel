@@ -17,7 +17,9 @@ async function airlineWithTrips() {
   const { supplier, agent: manager } = await supplierWithManager('airline');
   const flight = await createFlight({ supplierId: supplier._id, date: futureDate(3), departureTime: new Date(Date.now() + 3 * 864e5), arrivalTime: new Date(Date.now() + 3 * 864e5 + 2 * 3600e3) });
   const traveller = await loggedInAgent();
-  await pay(traveller, flightBooking(flight)).expect(201);
+  await pay(traveller, flightBooking(flight)).expect(201); // a real booking: never copied into a demo
+  const seeded = (await pay(traveller, flightBooking(flight, { travellers: [{ firstName: 'Seeded', lastName: 'Guest', ageCategory: 'adult', seat: '12C' }] })).expect(201)).body.booking;
+  await Booking.updateOne({ _id: seeded._id }, { $set: { isSynthetic: true } }); // as the seed's history is
   return { supplier, manager, flight };
 }
 
@@ -45,8 +47,9 @@ describe('visitor sandbox', () => {
     const list = departures.items || departures.departures || departures.flights;
     expect(list.length).toBe(1);
     expect(String(list[0]._id)).not.toBe(String(flight._id));
-    const copiedBookings = await Booking.countDocuments({ sandboxId: { $ne: null } });
-    expect(copiedBookings).toBe(1);
+    // Only seeded (synthetic) bookings are copied — never a real traveller's.
+    const copied = await Booking.find({ sandboxId: { $ne: null } }).lean();
+    expect(copied.map((c) => c.travellers[0].firstName)).toEqual(['Seeded']);
 
     // Real ids are invisible inside the sandbox, and sandbox ids are invisible to the real site.
     await visitor.get(`/api/sandbox/flights/${flight._id}`).expect(404);
@@ -113,6 +116,17 @@ describe('visitor sandbox', () => {
     expect(await AuditLog.countDocuments({ sandboxId: null })).toBe(0);
     await visitor.get('/api/sandbox/admin/analytics').expect(200);
     await visitor.post('/api/sandbox/switch').expect(400); // no traveller view for admin
+  });
+
+  it('a signed-in user keeps their real session through a demo', async () => {
+    const { supplier } = await airlineWithTrips();
+    const admin = await loggedInAgent({ role: 'admin' });
+    await admin.post('/api/sandbox').send({ kind: 'airline', supplierId: String(supplier._id) }).expect(201);
+    expect((await admin.get('/api/sandbox/auth/me').expect(200)).body.user.role).toBe('airline_manager');
+    expect((await admin.get('/api/auth/me').expect(200)).body.user.role).toBe('admin');
+    await admin.delete('/api/sandbox').expect(200);
+    expect((await admin.get('/api/auth/me').expect(200)).body.user.role).toBe('admin');
+    await admin.get('/api/admin/audit').expect(200);
   });
 
   it('caps: DEMO_MODE off, 20 at once, and validation', async () => {

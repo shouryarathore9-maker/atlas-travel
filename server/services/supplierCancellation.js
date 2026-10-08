@@ -72,6 +72,7 @@ export async function runDepartureCancellation(flightId, { deadline = Date.now()
       return { done: true, processed };
     }
     const now = new Date();
+    const receipts = new Map(batch.map((b) => [String(b._id), receiptNumber()]));
     const result = await Booking.bulkWrite(
       batch.map((b) => ({
         updateOne: {
@@ -79,32 +80,43 @@ export async function runDepartureCancellation(flightId, { deadline = Date.now()
           update: {
             $set: {
               status: 'cancelled',
-              cancellation: { cancelledAt: now, by: 'supplier', reason, refundAmount: b.fareBreakdown.total, feeRetained: 0, receiptNo: receiptNumber(), redemptionRestored: Boolean(b.offer), refundStatus: 'simulated' },
+              cancellation: { cancelledAt: now, by: 'supplier', reason, refundAmount: b.fareBreakdown.total, feeRetained: 0, receiptNo: receipts.get(String(b._id)), redemptionRestored: Boolean(b.offer), refundStatus: 'simulated' },
             },
           },
         },
       })),
     );
-    // Offer redemptions come back, grouped per offer.
+    // Only bookings this run actually cancelled (its receipt numbers) get offers back and a notice —
+    // an overlapping run, or a traveller who cancelled in between, must not be counted twice.
+    const mine = new Set(
+      (await Booking.find({ _id: { $in: batch.map((b) => b._id) }, 'cancellation.receiptNo': { $in: [...receipts.values()] } }, { _id: 1 }).lean()).map((b) => String(b._id)),
+    );
+    const cancelled = batch.filter((b) => mine.has(String(b._id)));
+    // Offer redemptions come back, grouped per offer (never below zero).
     const perOffer = {};
-    for (const b of batch) if (b.offer?.offerId) perOffer[b.offer.offerId] = (perOffer[b.offer.offerId] || 0) + 1;
+    for (const b of cancelled) if (b.offer?.offerId) perOffer[b.offer.offerId] = (perOffer[b.offer.offerId] || 0) + 1;
     if (Object.keys(perOffer).length) {
       await Offer.bulkWrite(
         Object.entries(perOffer).map(([id, n]) => ({
-          updateOne: { filter: { _id: new mongoose.Types.ObjectId(id), ...sandboxFilter() }, update: { $inc: { redemptions: -n } } },
+          updateOne: {
+            filter: { _id: new mongoose.Types.ObjectId(id), ...sandboxFilter() },
+            update: [{ $set: { redemptions: { $max: [0, { $subtract: ['$redemptions', n] }] } } }],
+          },
         })),
       );
       await Offer.updateMany({ _id: { $in: Object.keys(perOffer) }, status: 'exhausted', $expr: { $or: [{ $eq: ['$redemptionLimit', null] }, { $lt: ['$redemptions', '$redemptionLimit'] }] } }, { $set: { status: 'active', endNotified: false } });
     }
-    await Notification.insertMany(
-      batch.map((b) => ({
+    if (cancelled.length) {
+      await Notification.insertMany(
+        cancelled.map((b) => ({
         userId: b.userId,
         type: 'booking.cancelled_by_supplier',
         title: `The airline cancelled ${b.bookingReference}`,
         body: receiptBody(b, b.fareBreakdown.total, `${b.itemSummary.title} on ${new Date(b.travelDates.start).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' })} was cancelled by ${flight.airline}.`),
-        link: findAnother(b),
-      })),
-    );
+          link: findAnother(b),
+        })),
+      );
+    }
     processed += result.modifiedCount;
     await Flight.updateOne({ _id: flight._id }, { $inc: { 'cancellationJob.processed': result.modifiedCount } });
   }

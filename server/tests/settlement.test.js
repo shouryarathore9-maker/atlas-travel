@@ -1,6 +1,7 @@
 // Stage 6: monthly settlement statements, funding split, queries and adjustments, mark as paid.
 import mongoose from 'mongoose';
 import { describe, expect, it } from 'vitest';
+import Adjustment from '../models/Adjustment.js';
 import AuditLog from '../models/AuditLog.js';
 import Booking from '../models/Booking.js';
 import Config from '../models/Config.js';
@@ -124,6 +125,23 @@ describe('closing a month', () => {
 
     const actions = (await AuditLog.find({}).lean()).map((a) => a.action);
     expect(actions).toEqual(expect.arrayContaining(['statement.query', 'statement.adjustment', 'statement.mark_paid']));
+  });
+
+  it('a double-clicked Resolve creates one adjustment; a closed query lets the line be queried again', async () => {
+    const { supplier, agent } = await supplierWithManager('airline');
+    const [booking] = await Booking.create([flightDoc(supplier._id, inPeriod)]);
+    await closeStatements({ now: closingNow });
+    const statement = await Statement.findOne({ supplierId: supplier._id }).lean();
+    const url = `/api/supplier/statements/${statement._id}/lines/${booking.bookingReference}/query`;
+    const first = await agent.post(url).send({ note: 'Please check this line again.' }).expect(201);
+    const admin = await loggedInAgent({ role: 'admin' });
+    const both = await Promise.all([1, 2].map(() => admin.post(`/api/admin/tickets/${first.body.ticket._id}/resolve`).send({ outcome: 'adjustment', amount: 450, note: 'Refunded' })));
+    expect(both.map((r) => r.status).sort()).toEqual([200, 409]);
+    expect(await Adjustment.countDocuments({ ticketId: first.body.ticket._id })).toBe(1);
+
+    const second = await agent.post(url).send({ note: 'Another question on this line.' }).expect(201);
+    await admin.post(`/api/admin/tickets/${second.body.ticket._id}/close`).expect(200);
+    await agent.post(url).send({ note: 'Asking again after it was closed.' }).expect(201);
   });
 
   it('runs as a daily job step', async () => {

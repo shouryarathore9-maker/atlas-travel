@@ -28,6 +28,7 @@ import { HttpError } from '../utils/httpError.js';
 import { generateReference } from './bookingService.js';
 
 // Every model that carries sandbox documents (the ones using the sandboxScope plugin).
+const ORPHAN_GRACE_MS = 10 * 60 * 1000;
 export const SANDBOX_MODELS = [Adjustment, AuditLog, Booking, CancellationTemplate, Config, Flight, Hotel, Notification, Offer, Payment, Service, Statement, Supplier, Ticket, User];
 
 const newId = () => new mongoose.Types.ObjectId();
@@ -54,8 +55,12 @@ export async function sandboxOptions() {
 
 // ---------- Reading the real slice (in the real-data context) ----------
 
+// Demos are public, so only seeded (synthetic) bookings are copied — never a real traveller's
+// names, requests or tickets. Statement lines carry no personal data (references and amounts).
+const SEEDED_ONLY = { isSynthetic: true };
+
 async function airlineSlice(supplierId, { bookings = 40 } = {}) {
-  const supplier = await Supplier.findOne({ _id: supplierId, kind: 'airline' }).lean();
+  const supplier = await Supplier.findOne({ _id: supplierId, kind: 'airline', status: { $ne: 'suspended' } }).lean();
   if (!supplier) throw new HttpError(404, 'Choose one of the airlines.', 'NOT_FOUND');
   const now = new Date();
   const [services, flights] = await Promise.all([
@@ -63,17 +68,17 @@ async function airlineSlice(supplierId, { bookings = 40 } = {}) {
     Flight.find({ supplierId, status: 'scheduled', departureTime: { $gte: now, $lt: new Date(now.getTime() + SANDBOX_DAYS * 864e5) } }).lean(),
   ]);
   const flightIds = flights.map((f) => f._id);
-  const upcoming = await Booking.find({ supplierId, itemId: { $in: flightIds } }).sort({ createdAt: -1 }).limit(Math.ceil(bookings / 2)).lean();
-  const past = await Booking.find({ supplierId, _id: { $nin: upcoming.map((b) => b._id) } }).sort({ createdAt: -1 }).limit(bookings - upcoming.length).lean();
+  const upcoming = await Booking.find({ ...SEEDED_ONLY, supplierId, itemId: { $in: flightIds } }).sort({ createdAt: -1 }).limit(Math.ceil(bookings / 2)).lean();
+  const past = await Booking.find({ ...SEEDED_ONLY, supplierId, _id: { $nin: upcoming.map((b) => b._id) } }).sort({ createdAt: -1 }).limit(bookings - upcoming.length).lean();
   return { suppliers: [supplier], services, flights, hotels: [], bookings: [...upcoming, ...past] };
 }
 
 async function hotelSlice(supplierId, { bookings = 40 } = {}) {
-  const supplier = await Supplier.findOne({ _id: supplierId, kind: 'hotel' }).lean();
+  const supplier = await Supplier.findOne({ _id: supplierId, kind: 'hotel', status: { $ne: 'suspended' } }).lean();
   const hotel = supplier && (await Hotel.findById(supplier.hotelId).lean());
   if (!hotel || hotel.starRating < FEATURED_MIN_STARS || hotel.rating.average < FEATURED_MIN_RATING) throw new HttpError(404, 'Choose one of the listed hotels.', 'NOT_FOUND');
-  const upcoming = await Booking.find({ supplierId, 'travelDates.end': { $gt: new Date() } }).sort({ createdAt: -1 }).limit(Math.ceil(bookings / 2)).lean();
-  const past = await Booking.find({ supplierId, _id: { $nin: upcoming.map((b) => b._id) } }).sort({ createdAt: -1 }).limit(bookings - upcoming.length).lean();
+  const upcoming = await Booking.find({ ...SEEDED_ONLY, supplierId, 'travelDates.end': { $gt: new Date() } }).sort({ createdAt: -1 }).limit(Math.ceil(bookings / 2)).lean();
+  const past = await Booking.find({ ...SEEDED_ONLY, supplierId, _id: { $nin: upcoming.map((b) => b._id) } }).sort({ createdAt: -1 }).limit(bookings - upcoming.length).lean();
   return { suppliers: [supplier], services: [], flights: [], hotels: [hotel], bookings: [...upcoming, ...past] };
 }
 
@@ -289,9 +294,11 @@ export async function sweepSandboxes({ now = Date.now() } = {}) {
     const stale = await Sandbox.find({ $or: [{ expiresAt: { $lte: new Date(now) } }, { lastSeenAt: { $lte: new Date(now - SANDBOX_IDLE_MS) } }] }, { _id: 1 }).lean();
     for (const s of stale) await endSandbox(s._id);
     const live = new Set((await Sandbox.find({}, { _id: 1 }).lean()).map((s) => String(s._id)));
+    // A sandbox id is an ObjectId minted when the sandbox starts: a young one may still be copying.
+    const settled = (sid) => sid.getTimestamp().getTime() < now - ORPHAN_GRACE_MS;
     let orphans = 0;
     for (const Model of SANDBOX_MODELS) {
-      const ids = (await Model.distinct('sandboxId', { sandboxId: { $ne: null } })).filter((sid) => !live.has(String(sid)));
+      const ids = (await Model.distinct('sandboxId', { sandboxId: { $ne: null } })).filter((sid) => !live.has(String(sid)) && settled(sid));
       if (ids.length) orphans += (await Model.deleteMany({ sandboxId: { $in: ids } })).deletedCount;
     }
     return { ended: stale.length, orphans };

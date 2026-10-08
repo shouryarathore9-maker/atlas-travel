@@ -12,7 +12,7 @@ import Service from '../models/Service.js';
 import Supplier from '../models/Supplier.js';
 import { AIRCRAFT, AIRCRAFT_KEYS } from '../services/aircraft.js';
 import { audit, snapshot } from '../services/audit.js';
-import { useSandboxQuota } from '../services/sandbox.js';
+import { inSandbox, useSandboxQuota } from '../services/sandbox.js';
 import { materialiseDepartures, rebuildServiceDepartures, WINDOW_DAYS } from '../services/schedule.js';
 import { CITIES, HOTEL_AMENITIES, HOTEL_PHOTO_COUNT, ROOM_AMENITIES } from '../seed/data.js';
 import { distanceKm } from '../seed/generate.js';
@@ -315,7 +315,9 @@ export async function updateOwnHotel(req, res) {
   const input = req.validated.body;
   const before = snapshot(hotel, HOTEL_AUDIT_FIELDS);
   // Uploaded photos must be this hotel's own.
-  const uploadIds = input.photos.filter((p) => UPLOAD_PATH.test(p)).map((p) => p.split('/').pop());
+  // (A demo copy keeps any uploads the real hotel already shows; it can't upload new ones.)
+  const alreadyShown = new Set(inSandbox() ? hotel.photos : []);
+  const uploadIds = input.photos.filter((p) => UPLOAD_PATH.test(p) && !alreadyShown.has(p)).map((p) => p.split('/').pop());
   if (uploadIds.length && (await Photo.countDocuments({ _id: { $in: uploadIds }, supplierId: req.supplierId })) !== uploadIds.length) {
     throw new HttpError(400, 'One of those photos isn’t one of your uploads.', 'VALIDATION_ERROR');
   }

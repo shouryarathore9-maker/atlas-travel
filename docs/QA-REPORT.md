@@ -125,3 +125,37 @@ Endpoints in §5 all exist (bookings are created by `POST /api/payments/mock`, a
 
 ### Test data note
 QA used two local test accounts (`qa-alice@atlas.test`, `qa-bob@atlas.test`) and made/cancelled a handful of bookings, and one seeded DEL→BLR flight was deleted by the admin test. `npm run seed` resets all of it.
+
+---
+
+# Phase 2 QA (8 Oct 2026)
+
+Scope: Phase 2 stages 1–8 plus the owner's extra requests (supplier suspension, pricing limits, offer artwork, hotel photo uploads, bell chime).
+Evidence: server suite **130 tests / 15 files** (Supertest on an in-memory MongoDB), client suite **29 tests**, lint 0 errors, browser walkthroughs on the dev server at ~375 / ~800 / 1280 px, an adversarial code review of the riskiest code (sandbox isolation, authorisation, money, crashes), and a storage measurement.
+
+## Adversarial review — findings and fixes
+
+| # | Finding | Fix | Verified |
+|---|---|---|---|
+| 1 | **Visitor demos copied a supplier's latest bookings — including real travellers' names, special requests and PNRs — into public, anonymous sandboxes.** A suspended supplier could also be demoed by id. | Demos copy only seeded (synthetic) bookings; suspended suppliers are refused. | 🔧 test: a real booking is never copied, the seeded one is |
+| 2 | Resolving a statement query twice at once (double-click) created two adjustments → the supplier would be paid twice. | The query is claimed atomically before the adjustment is created. | 🔧 test: two parallel resolves → one 200, one 409, one adjustment |
+| 3 | Two overlapping departure cancellations (retry / daily job) could restore offer redemptions twice (even below zero) and notify travellers twice; the audit entry was written twice. | Each run restores offers and notifies only for bookings it cancelled (by its receipt numbers); redemptions never go below 0; only the request that cancels the flight audits. | 🔧 existing operations tests + review |
+| 4 | The orphan sweep could delete a sandbox that another visitor was creating at the same moment. | Sandboxes younger than 10 minutes are never treated as orphans. | 🔧 review |
+| 5 | A statement query closed without resolution blocked that line from ever being queried again. | Only open queries block a new one. | 🔧 test |
+| 6 | A demo of a hotel that uses uploaded photos couldn't save its property page. | A demo copy may keep the uploads the hotel already shows (it still can't upload). | 🔧 review |
+
+Ruled out by the review: settlement closes are idempotent; mark-paid is atomic; every daily-job step but the sweep runs on real data only; every `bulkWrite` carries the sandbox filter; real and sandbox cookies can't be swapped; bad ids give 400/404, never 500.
+
+## Found in walkthroughs (fixed)
+- `/flights` or `/hotels` opened without a search showed a raw validation message and the title "Flights undefined to undefined" → friendly "Where would you like to fly? / Where are you staying?" prompt.
+- A page loaded inside a demo could fetch real data before the demo session was known → API calls wait for the first session check.
+- Leaving a demo could land on the sign-in page, and its first requests went to the ended sandbox → the app leaves demo mode synchronously and navigates first (back to the console switches the account first).
+- Analytics: five KPI cards wrapped 4 + 1; the chart grid squeezed charts at tablet widths; the bookings line fell to zero in recent weeks because seeded history had no bookings for upcoming trips → fixed grid, auto-fit charts, and ~90 seeded bookings for the next 45 days (on seats/rooms already counted as sold).
+- Admin Suppliers: supplier names rendered in table-header capitals → plain cells.
+- Seeded adjustment note mentioned a seat fee on a hotel's statement → note matches the supplier type.
+- Admin Tickets: statement queries couldn't be filtered, and "Resolved" had no tab → type and status filters.
+
+## Measurements
+- Database (dev, full seed): 13.5 MB data + 7.9 MB indexes ≈ 21.5 MB; with 20 sandboxes (the cap) ≈ 29 MB — under 6% of the 512 MB M0 limit.
+- Analytics API: ~0.5–0.6 s for 30 and 180 days on the seeded data (home connection to Atlas); the dashboard renders in well under the 3 s target.
+- Creating a demo: ~2 s (≈ 41 s for 20 back to back from a home connection).
