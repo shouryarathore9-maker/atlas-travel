@@ -2672,9 +2672,12 @@
 .ticket-list p {
   margin: 2px 0 0;
 }
-.ticket-preview {
-  max-width: 380px;
+/* Beats `.admin-table td { white-space: nowrap }`, so long messages wrap instead of running under Status. */
+.admin-table td.ticket-preview {
+  min-width: 240px;
+  max-width: 420px;
   white-space: normal;
+  overflow-wrap: anywhere;
 }
 .ticket-actions {
   margin: var(--space-3) 0;
