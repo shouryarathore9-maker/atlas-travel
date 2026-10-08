@@ -159,3 +159,9 @@ Ruled out by the review: settlement closes are idempotent; mark-paid is atomic; 
 - Database (dev, full seed): 13.5 MB data + 7.9 MB indexes ≈ 21.5 MB; with 20 sandboxes (the cap) ≈ 29 MB — under 6% of the 512 MB M0 limit.
 - Analytics API: ~0.5–0.6 s for 30 and 180 days on the seeded data (home connection to Atlas); the dashboard renders in well under the 3 s target.
 - Creating a demo: ~2 s (≈ 41 s for 20 back to back from a home connection).
+
+## Live verification (after merge, re-seed and deploy — https://atlas-travel-two.vercel.app)
+- Production database re-seeded: 52 suppliers, 144 services, 8,532 departures, 48 hotels, 14 offers, 914 synthetic bookings (88 upcoming), 215 statements over 6 months.
+- API smoke test: flight search, featured hotels, offers (themed artwork), admin sign-in, analytics 30 days 0.26 s / 180 days 0.29 s, 215 statements across Apr–Sep, pricing limits.
+- Demos on Vercel: hotel and airline demos start, show only seeded guests, and leave cleanly to the homepage (found and fixed live: leaving briefly bounced to sign-in).
+- Lighthouse (mobile settings): home — performance 86 · accessibility 100 · best practices 100; offers — 84 · 98 · 100; flight results — 84 · 98 · 100.
