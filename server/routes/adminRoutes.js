@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import {
   adminBookingsSchema,
+  analyticsSchema,
+  getAnalytics,
   auditQuerySchema,
   getBooking,
   listAudit,
@@ -22,6 +24,7 @@ const router = Router();
 
 router.use(requireAuth, adminOnly);
 
+router.get('/analytics', validate(analyticsSchema, 'query'), getAnalytics);
 router.get('/audit', validate(auditQuerySchema, 'query'), listAudit);
 router.get('/suppliers', listSuppliers);
 router.post('/suppliers/:id/suspend', validate(suspendSchema), suspendSupplier);

@@ -5,6 +5,7 @@ import Review from '../models/Review.js';
 import Supplier from '../models/Supplier.js';
 import { roomFits } from '../services/bookingService.js';
 import { hotelStay } from '../services/pricing.js';
+import { track } from '../services/analytics.js';
 import { getPricingLimits } from '../services/pricingLimits.js';
 import { hiddenSupplierFilter, isSuspended } from '../services/suppliers.js';
 import { describeTemplate, hasFreeWindow, loadTemplates } from '../services/templates.js';
@@ -78,6 +79,7 @@ export async function searchHotels(req, res) {
   const pastDates = q.checkIn < todayIstString();
   const tooFar = q.checkIn > lastBookableDate();
   if (pastDates || tooFar) {
+    if (q.page === 1) await track('search', 'hotel', { zeroResults: true });
     return res.json({
       results: [],
       total: 0,
@@ -140,6 +142,7 @@ export async function searchHotels(req, res) {
   });
 
   filtered.sort(sorters[q.sort]);
+  if (q.page === 1) await track('search', 'hotel', { zeroResults: available.length === 0 });
   res.json({ ...paginate(filtered, q.page, q.limit), facets, unfilteredTotal: available.length });
 }
 
@@ -159,6 +162,7 @@ export async function getHotel(req, res) {
   if (isSuspended(supplier)) throw new HttpError(404, 'This hotel isn’t available on Atlas right now.', 'NOT_FOUND');
   const card = supplier?.rateCard?.kind ? supplier.rateCard : null;
   const now = Date.now();
+  await track('view', 'hotel');
   res.json({
     hotel: {
       ...hotel,

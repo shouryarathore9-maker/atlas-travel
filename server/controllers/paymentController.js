@@ -17,6 +17,7 @@ import {
   ticketNumber,
 } from '../services/bookingService.js';
 import { notifySupplier, notifyUser } from '../services/notify.js';
+import { track } from '../services/analytics.js';
 import { claimRedemption } from '../services/offers.js';
 import { quoteBooking, quoteView } from '../services/quote.js';
 
@@ -89,7 +90,9 @@ function assertCanBook(user) {
 export async function quote(req, res) {
   assertCanBook(req.user);
   const { booking, offerCode: code } = req.validated.body;
-  res.json(quoteView(await quoteBooking(booking, { userId: req.user._id, offerCode: code })));
+  const quoted = await quoteBooking(booking, { userId: req.user._id, offerCode: code });
+  await track('checkout_start', booking.type);
+  res.json(quoteView(quoted));
 }
 
 // The winning request reserves inventory a few milliseconds before its booking is saved,
@@ -155,6 +158,7 @@ export async function mockPayment(req, res) {
   }
   const { draft } = quoted;
   const amount = draft.fareBreakdown.total;
+  await track('pay_attempt', input.type);
 
   // The server re-prices at payment; a different total is never charged silently.
   if (expectedTotal !== undefined && expectedTotal !== amount) {
@@ -231,5 +235,6 @@ export async function mockPayment(req, res) {
     link: `/bookings/${booking.bookingReference}/confirmation`,
   });
 
+  await track('confirmed', booking.type);
   res.status(201).json({ booking, payment: { status: 'success', transactionId: payment.transactionId } });
 }

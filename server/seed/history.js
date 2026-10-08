@@ -1,6 +1,8 @@
 // Six months of synthetic booking history (prd.md → Decisions 12; architecture.md §7), so settlement
 // statements and the analytics dashboard are never empty. Deterministic (seeded PRNG), every document
-// flagged `isSynthetic`, every trip already over — so it never touches live seats or rooms.
+// flagged `isSynthetic`. Past trips never touch live inventory; bookings already made for trips in the
+// next 45 days sit on seats the seeded departures count as sold and take rooms off the live counters.
+export const FUTURE_DAYS = 45;
 import crypto from 'node:crypto';
 import mongoose from 'mongoose';
 import { AIRCRAFT, cabinSeats } from '../services/aircraft.js';
@@ -39,7 +41,11 @@ function offerOptions(offers, { day, product, supplierId }) {
 /**
  * @returns { users, bookings, payments, dailyStats, offerUse } — plain documents ready for insertMany.
  */
-export function generateHistory({ airlineSuppliers, hotelSuppliers, services, hotels, offers, templates, today = todayIstString(), rng = createRng(97) }) {
+export function generateHistory({ airlineSuppliers, hotelSuppliers, services, hotels, offers, templates, flights = [], today = todayIstString(), now = Date.now(), rng = createRng(97) }) {
+  const departureOf = new Map(flights.map((f) => [`${f.serviceId}|${f.date}`, f]));
+  const seatsUsed = new Map(); // departure id → seats given to synthetic bookings
+  const roomsTaken = new Map(); // `${hotelId}|${room}` → rooms taken by upcoming synthetic stays
+  const roomChanges = [];
   const supplierById = Object.fromEntries([...airlineSuppliers, ...hotelSuppliers].map((s) => [String(s._id), s]));
   const users = Array.from({ length: 80 }, (_, i) => {
     const first = FIRST[i % FIRST.length];
@@ -59,11 +65,13 @@ export function generateHistory({ airlineSuppliers, hotelSuppliers, services, ho
   const funnel = {};
   const popularHotels = hotels.filter((h) => h.starRating >= 4).concat(hotels); // better hotels twice as likely
 
-  for (let back = HISTORY_DAYS; back >= 1; back--) {
+  for (let back = HISTORY_DAYS; back >= -FUTURE_DAYS; back--) {
+    if (back === 0) continue; // trips ending today are neither history nor clearly upcoming
     const travelDay = addDays(today, -back);
-    // A gentle upward trend, busier weekends and festival weeks: ~3–6 trips end each day.
+    const upcoming = back < 0;
+    // A gentle upward trend, busier weekends: ~3–6 trips a day (upcoming ones only if already booked).
     const weekday = new Date(`${travelDay}T00:00:00Z`).getUTCDay();
-    const n = Math.round((3 + (HISTORY_DAYS - back) / 80 + (weekday === 0 || weekday === 6 ? 1.2 : 0)) * (0.7 + rng.next() * 0.6));
+    const n = Math.round((3 + Math.min(HISTORY_DAYS, HISTORY_DAYS - back) / 80 + (weekday === 0 || weekday === 6 ? 1.2 : 0)) * (0.7 + rng.next() * 0.6));
     for (let k = 0; k < n; k++) {
       const user = rng.pick(users);
       const isFlight = rng.next() < 0.56;
@@ -76,15 +84,30 @@ export function generateHistory({ airlineSuppliers, hotelSuppliers, services, ho
         const startDay = travelDay; // short flights land the same day
         const departure = new Date(istMidnight(startDay).getTime() + service.departureMinute * 60000);
         const arrival = new Date(departure.getTime() + service.durationMinutes * 60000);
-        if (arrival.getTime() >= istMidnight(today).getTime()) continue;
+        if (!upcoming && arrival.getTime() >= istMidnight(today).getTime()) continue;
         const createdAt = new Date(departure.getTime() - lead * DAY_MS - rng.int(1, 20) * 3600e3);
+        if (createdAt.getTime() >= now) continue; // not booked yet
+        const flight = upcoming ? departureOf.get(`${service._id}|${travelDay}`) : null;
+        if (upcoming && !flight) continue; // the service doesn't fly that day
         const business = AIRCRAFT[service.aircraftConfig].cabins.business && rng.next() < 0.08;
         const tierName = business ? 'Business' : rng.next() < 0.7 ? 'Saver' : 'Flexi';
         const tier = card.tiers.find((t) => t.name === tierName);
         const fare = flightFare(card, { origin: service.origin.code, destination: service.destination.code, cabin: tier.cabin, tier, departureTime: departure, now: createdAt.getTime(), load: 0.2 + rng.next() * 0.6 });
         const paying = rng.next() < 0.6 ? 1 : rng.int(2, 3);
         const infants = paying > 1 && rng.next() < 0.15 ? 1 : 0;
-        const seats = rng.sample(cabinSeats(service.aircraftConfig, tier.cabin), paying);
+        let seats;
+        if (flight) {
+          // Upcoming: take seats the departure already counts as sold ("other passengers").
+          const cabinSet = new Set(cabinSeats(service.aircraftConfig, tier.cabin));
+          const used = seatsUsed.get(String(flight._id)) || new Set();
+          const free = flight.seatMap.unavailableSeats.filter((s) => cabinSet.has(s) && !flight.seatMap.blockedSeats.includes(s) && !used.has(s));
+          if (free.length < paying) continue;
+          seats = rng.sample(free, paying);
+          seats.forEach((s) => used.add(s));
+          seatsUsed.set(String(flight._id), used);
+        } else {
+          seats = rng.sample(cabinSeats(service.aircraftConfig, tier.cabin), paying);
+        }
         const seatCharges = tier.cabin === 'economy' ? seats.filter(() => rng.next() < 0.35).length * 350 : 0;
         const mealCharges = tier.cabin === 'economy' ? Array.from({ length: paying }).filter(() => rng.next() < 0.3).length * 300 : 0;
         const travellers = [
@@ -96,7 +119,7 @@ export function generateHistory({ airlineSuppliers, hotelSuppliers, services, ho
         doc = {
           type: 'flight',
           supplier,
-          itemId: new mongoose.Types.ObjectId(), // the departure itself has been pruned
+          itemId: flight ? flight._id : new mongoose.Types.ObjectId(), // a past departure has been pruned
           createdAt,
           start: departure,
           end: arrival,
@@ -123,9 +146,13 @@ export function generateHistory({ airlineSuppliers, hotelSuppliers, services, ho
         const room = rng.pick(hotel.roomTypes);
         const plan = card.ratePlans[rng.next() < 0.75 ? 0 : 1];
         const createdAt = new Date(istMidnight(checkIn).getTime() - lead * DAY_MS + rng.int(8, 22) * 3600e3);
+        if (createdAt.getTime() >= now) continue; // not booked yet
         const stay = hotelStay(card, { roomTypeName: room.name, checkIn, checkOut, now: createdAt.getTime(), ratePlan: plan });
         if (!stay) continue;
         const rooms = rng.next() < 0.85 ? 1 : 2;
+        const roomKey = `${hotel._id}|${room.name}`;
+        // Upcoming stays take rooms off the live counter, never more than a third of a room type.
+        if (upcoming && (roomsTaken.get(roomKey) || 0) + rooms > Math.floor(room.roomsTotal / 3)) continue;
         const guests = Math.min(room.occupancy.adults * rooms, rng.int(1, 3));
         const breakfast = !room.breakfastIncluded && rng.next() < 0.35 ? card.breakfastPerGuest * guests * nights : 0;
         const roomCharges = stay.perRoom * rooms;
@@ -151,8 +178,10 @@ export function generateHistory({ airlineSuppliers, hotelSuppliers, services, ho
               destination: hotel.city,
             },
             pricing: { engineVersion: ENGINE_VERSION, nights: stay.nights, avgNightly: stay.avgNightly, ratePlan: plan.key },
-            roomsReturned: true,
+            roomsReturned: !upcoming, // upcoming stays give their rooms back after check-out, like any booking
           },
+          roomKey,
+          rooms,
         };
       }
 
@@ -166,13 +195,15 @@ export function generateHistory({ airlineSuppliers, hotelSuppliers, services, ho
       if (discount) offerUse[String(offer._id)] = (offerUse[String(offer._id)] || 0) + 1;
 
       // 82% travelled, 13% cancelled by the traveller (fee per the frozen terms), 5% by the supplier.
+      // Upcoming trips are only ever cancelled by the traveller (the departures are still flying).
       const roll = rng.next();
       const snapshot = policySnapshot(doc.template, { start: doc.start, oneNight: doc.oneNight, total: fareBreakdown.total });
       let status = 'confirmed';
       let cancellation;
-      if (roll > 0.82) {
+      const lastMoment = Math.min(doc.start.getTime(), now) - 3600e3;
+      if (roll > 0.82 && lastMoment > doc.createdAt.getTime() && !(upcoming && roll > 0.95)) {
         status = 'cancelled';
-        const cancelledAt = new Date(doc.createdAt.getTime() + rng.next() * Math.max(3600e3, doc.start.getTime() - doc.createdAt.getTime() - 3600e3));
+        const cancelledAt = new Date(doc.createdAt.getTime() + rng.next() * (lastMoment - doc.createdAt.getTime()));
         if (roll > 0.95) {
           cancellation = { cancelledAt, by: 'supplier', reason: doc.type === 'flight' ? 'Operational reasons' : 'Overbooked on these dates', refundAmount: fareBreakdown.total, feeRetained: 0, refundStatus: 'simulated', redemptionRestored: Boolean(discount) };
         } else {
@@ -183,6 +214,10 @@ export function generateHistory({ airlineSuppliers, hotelSuppliers, services, ho
         cancellation.receiptNo = `RF${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
       }
 
+      if (doc.type === 'hotel' && upcoming && status === 'confirmed') {
+        roomsTaken.set(doc.roomKey, (roomsTaken.get(doc.roomKey) || 0) + doc.rooms);
+        roomChanges.push({ hotelId: doc.itemId, roomTypeName: doc.extra.selection.roomTypeName, rooms: doc.rooms });
+      }
       const _id = new mongoose.Types.ObjectId();
       const paymentId = new mongoose.Types.ObjectId();
       const special = rng.next() < 0.04 ? rng.pick(REQUESTS) : null;
@@ -214,6 +249,7 @@ export function generateHistory({ airlineSuppliers, hotelSuppliers, services, ho
       }
 
       // The funnel this booking came out of (rolled-up daily summaries, as the daily job writes them).
+      if (bookedOn >= today) continue; // today's funnel comes from live events
       const key = `${bookedOn}|${doc.type}`;
       funnel[key] = (funnel[key] || 0) + 1;
     }
@@ -226,14 +262,14 @@ export function generateHistory({ airlineSuppliers, hotelSuppliers, services, ho
     const date = addDays(today, -back);
     for (const product of ['flight', 'hotel']) {
       const confirmed = funnel[`${date}|${product}`] || 0;
-      const payAttempts = confirmed + Math.round(confirmed * (0.05 + rng.next() * 0.06));
+      const payAttempts = confirmed + Array.from({ length: confirmed }).filter(() => rng.next() < 0.09).length + (rng.next() < 0.3 ? 1 : 0);
       const checkoutStarts = Math.round(payAttempts * (1.8 + rng.next() * 0.6)) + rng.int(0, 2);
       const views = Math.round(checkoutStarts * (2.5 + rng.next())) + rng.int(2, 6);
       const searches = Math.round(views * (1.6 + rng.next() * 0.5)) + rng.int(5, 15);
       dailyStats.push({ date, product, searches, zeroResults: Math.round(searches * (0.03 + rng.next() * 0.04)), views, checkoutStarts, payAttempts, confirmed, isSynthetic: true });
     }
   }
-  return { users, bookings, payments, dailyStats, offerUse };
+  return { users, bookings, payments, dailyStats, offerUse, roomChanges };
 }
 
 // ---------- Settlement history (needs the database) ----------

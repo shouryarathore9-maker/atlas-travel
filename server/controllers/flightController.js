@@ -6,6 +6,7 @@ import Supplier from '../models/Supplier.js';
 import { AIRCRAFT, hasCabin } from '../services/aircraft.js';
 import { mealsFor, seatInfo } from '../services/bookingService.js';
 import { FLIGHT_TAX_RATE, flightFare, INFANT_FEE, tiersForCabin } from '../services/pricing.js';
+import { track } from '../services/analytics.js';
 import { getPricingLimits } from '../services/pricingLimits.js';
 import { hiddenSupplierFilter, isSuspended } from '../services/suppliers.js';
 import { describeTemplate, loadTemplates } from '../services/templates.js';
@@ -95,6 +96,7 @@ export async function searchFlights(req, res) {
   const [start, end] = istDayRange(q.date);
   // Beyond the booking horizon there are no departures yet; say so instead of "no flights".
   if (q.date > lastBookableDate()) {
+    if (q.page === 1) await track('search', 'flight', { zeroResults: true });
     return res.json({ results: [], total: 0, page: 1, pages: 1, unfilteredTotal: 0, tooFar: true, facets: { airlines: [], stops: [], minPrice: 0, maxPrice: 0 } });
   }
 
@@ -159,6 +161,7 @@ export async function searchFlights(req, res) {
   });
 
   filtered.sort(sorters[q.sort]);
+  if (q.page === 1) await track('search', 'flight', { zeroResults: available.length === 0 });
   res.json({ ...paginate(filtered, q.page, q.limit), facets, unfilteredTotal: available.length });
 }
 
@@ -201,6 +204,7 @@ export async function getFlight(req, res) {
     : [];
 
   const layout = cabinName ? AIRCRAFT[flight.aircraftConfig].cabins[cabinName] : null;
+  await track('view', 'flight');
   const unavailable = layout ? flight.seatMap.unavailableSeats.filter((s) => seatInfo(flight.aircraftConfig, s)?.cabin === cabinName) : [];
 
   res.json({

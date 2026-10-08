@@ -35,6 +35,7 @@ const SupplierOffers = lazy(() => import('./pages/supplier/SupplierOffers.jsx'))
 const SupplierStatements = lazy(() => import('./pages/supplier/Statements.jsx').then((m) => ({ default: m.Statements })));
 const SupplierStatement = lazy(() => import('./pages/supplier/Statements.jsx').then((m) => ({ default: m.StatementDetail })));
 const AdminConsole = lazy(() => import('./pages/admin/AdminConsole.jsx'));
+const AdminAnalytics = lazy(() => import('./pages/admin/AdminAnalytics.jsx'));
 const AdminBookings = lazy(() => import('./pages/admin/AdminBookings.jsx'));
 const AdminBookingDetail = lazy(() => import('./pages/admin/AdminBookingDetail.jsx'));
 const AdminTickets = lazy(() => import('./pages/admin/AdminTickets.jsx'));
@@ -130,7 +131,8 @@ export default function App() {
             <Route path="offers/:id" element={<OfferEditor scope="supplier" key="edit" />} />
           </Route>
           <Route path="/admin" element={authed(<AdminConsole />, 'admin')}>
-            <Route index element={<Navigate to="/admin/bookings" replace />} />
+            <Route index element={<Navigate to="/admin/analytics" replace />} />
+            <Route path="analytics" element={<AdminAnalytics />} />
             <Route path="bookings" element={<AdminBookings />} />
             <Route path="bookings/:ref" element={<AdminBookingDetail />} />
             <Route path="tickets" element={<AdminTickets />} />

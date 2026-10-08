@@ -8,9 +8,11 @@ import Payment from '../models/Payment.js';
 import Supplier from '../models/Supplier.js';
 import Ticket from '../models/Ticket.js';
 import User from '../models/User.js';
+import { analytics } from '../services/analytics.js';
 import { audit } from '../services/audit.js';
 import { HttpError } from '../utils/httpError.js';
-import { pagination } from '../utils/query.js';
+import { addDays, todayIstString } from '../utils/dates.js';
+import { dateString, pagination } from '../utils/query.js';
 
 export const auditQuerySchema = z.object({
   supplierId: z.string().refine((id) => mongoose.isValidObjectId(id), 'Invalid supplier').optional(),
@@ -97,6 +99,30 @@ export async function suspendSupplier(req, res) {
 export async function reactivateSupplier(req, res) {
   const supplier = await setSupplierStatus(req, 'active');
   res.json({ supplier: { _id: supplier._id, name: supplier.name, status: supplier.status, suspension: supplier.suspension } });
+}
+
+// ---------- Analytics ----------
+
+export const MAX_ANALYTICS_DAYS = 180;
+export const analyticsSchema = z
+  .object({
+    range: z.enum(['7', '30', '90', '180', 'custom']).default('30'),
+    from: dateString.optional(),
+    to: dateString.optional(),
+    product: z.enum(['all', 'flight', 'hotel']).default('all'),
+    supplierId: z.string().refine((id) => mongoose.isValidObjectId(id), 'Invalid supplier').optional(),
+  })
+  .transform((q) => {
+    const today = todayIstString();
+    if (q.range !== 'custom') return { ...q, to: today, from: addDays(today, -(Number(q.range) - 1)) };
+    return { ...q, from: q.from || addDays(today, -29), to: q.to && q.to < today ? q.to : today };
+  })
+  .refine((q) => q.from <= q.to, { message: 'The start must be on or before the end', path: ['from'] })
+  .refine((q) => Date.parse(q.to) - Date.parse(q.from) < MAX_ANALYTICS_DAYS * 864e5, { message: `Choose at most ${MAX_ANALYTICS_DAYS} days`, path: ['from'] });
+
+export async function getAnalytics(req, res) {
+  const { from, to, product, supplierId } = req.validated.query;
+  res.json(await analytics({ from, to, product: product === 'all' ? null : product, supplierId }));
 }
 
 // ---------- Bookings (read-only) and special requests ----------

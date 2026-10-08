@@ -7,6 +7,7 @@ import { acquireLock, releaseLock } from '../models/JobLock.js';
 import { sweepUnusedPhotos } from '../controllers/photoController.js';
 import { trimNotifications } from './notify.js';
 import { closeStatements } from './settlement.js';
+import { rollUpEvents } from './analytics.js';
 import { expireOffers } from './offers.js';
 import { closeRescheduleWindows, resumeCancellations } from './supplierCancellation.js';
 import { materialiseDepartures, pruneDepartures, WINDOW_DAYS } from './schedule.js';
@@ -19,7 +20,7 @@ export const MAX_NEW_DAYS_PER_RUN = 10;
 // stay's check-out has passed. Each booking is claimed first, so rooms are returned exactly once.
 export async function returnHotelRooms({ now = Date.now(), limit = 500 } = {}) {
   const due = await Booking.find(
-    { type: 'hotel', status: 'confirmed', roomsReturned: { $ne: true }, isSynthetic: { $ne: true }, 'travelDates.end': { $lte: new Date(now) } },
+    { type: 'hotel', status: 'confirmed', roomsReturned: { $ne: true }, 'travelDates.end': { $lte: new Date(now) } },
     { _id: 1 },
   )
     .limit(limit)
@@ -47,6 +48,7 @@ export const STEPS = [
   ['statements', ({ now }) => closeStatements({ now })],
   ['rescheduleWindows', ({ now }) => closeRescheduleWindows({ now })],
   ['notifications', () => trimNotifications()],
+  ['funnel', ({ now }) => rollUpEvents({ now })],
   ['unusedPhotos', ({ now }) => sweepUnusedPhotos({ now })],
 ];
 

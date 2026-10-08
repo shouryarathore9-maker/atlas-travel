@@ -215,7 +215,7 @@ describe('daily job', () => {
     await Booking.create([
       { ...base, userId: hotel._id, bookingReference: 'ATDONE01', travelDates: { start: new Date(Date.now() - 3 * 86400e3), end: past } },
       { ...base, userId: hotel._id, bookingReference: 'ATSOON01', travelDates: { start: new Date(Date.now() + 86400e3), end: new Date(Date.now() + 2 * 86400e3) } },
-      { ...base, userId: hotel._id, bookingReference: 'ATSYN001', isSynthetic: true, travelDates: { start: past, end: past } },
+      { ...base, userId: hotel._id, bookingReference: 'ATSYN001', isSynthetic: true, roomsReturned: true, travelDates: { start: past, end: past } }, // past history is seeded as already returned
     ]);
     expect(await returnHotelRooms()).toBe(1);
     expect(await returnHotelRooms()).toBe(0);

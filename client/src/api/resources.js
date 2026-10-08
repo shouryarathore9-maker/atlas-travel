@@ -112,6 +112,7 @@ export const supplierApi = {
 };
 
 export const adminApi = {
+  analytics: (query, opts) => api('/admin/analytics', { query, ...opts }),
   audit: (query, opts) => api('/admin/audit', { query, ...opts }),
   suppliers: (opts) => api('/admin/suppliers', opts),
   suspendSupplier: (id, reason) => api(`/admin/suppliers/${id}/suspend`, { method: 'POST', body: { reason } }),

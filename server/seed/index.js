@@ -160,6 +160,7 @@ async function main() {
     services,
     hotels,
     offers,
+    flights,
     templates: Object.fromEntries(DEFAULT_TEMPLATES.map((t) => [t.key, t])),
   });
   await User.deleteMany({ email: new RegExp(`@${HISTORY_EMAIL_DOMAIN.replace(/\./g, '\\.')}$`) });
@@ -168,6 +169,9 @@ async function main() {
   for (let i = 0; i < history.bookings.length; i += 500) await Booking.insertMany(history.bookings.slice(i, i + 500), { ordered: false, timestamps: false });
   await insertInChunks(Payment, history.payments);
   await insertInChunks(DailyStat, history.dailyStats);
+  for (const { hotelId, roomTypeName, rooms } of history.roomChanges) {
+    await Hotel.updateOne({ _id: hotelId }, { $inc: { 'roomTypes.$[room].roomsAvailable': -rooms } }, { arrayFilters: [{ 'room.name': roomTypeName }] });
+  }
   for (const [offerId, used] of Object.entries(history.offerUse)) {
     const offer = offers.find((o) => String(o._id) === offerId);
     if (offer.status !== 'exhausted') await Offer.updateOne({ _id: offerId }, { $inc: { redemptions: used } });
@@ -178,7 +182,7 @@ async function main() {
     `Seeded ${airlineSuppliers.length + hotelSuppliers.length} suppliers, ${services.length} services, ` +
       `${flights.length} departures (${SEED_DAYS} days), ${hotels.length} hotels, ${reviews.length} reviews, ${offers.length} offers.`,
   );
-  console.log(`History: ${history.bookings.length} past bookings, ${history.payments.length} payments, ${settlement.statements} statements over ${settlement.periods} months.`);
+  console.log(`History: ${history.bookings.length} synthetic bookings (${history.bookings.filter((b) => b.travelDates.start > new Date()).length} still upcoming), ${history.payments.length} payments, ${settlement.statements} statements over ${settlement.periods} months.`);
   console.log(`Accounts: ${DEMO_USERS.map((u) => `${u.email} (${u.role})`).join(', ')} — passwords are the SEED_* values in server/.env`);
   console.log(`${managers.length} manager accounts — passwords in server/manager-credentials.local.md (git-ignored)`);
   console.timeEnd('seed');
