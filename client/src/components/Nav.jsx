@@ -6,7 +6,7 @@ import { useAuth } from '../hooks/useAuth.jsx';
 import { isManager } from '../lib/roles.js';
 
 export default function Nav() {
-  const { user, logout, sandbox } = useAuth();
+  const { user, status, logout, sandbox } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -46,7 +46,7 @@ export default function Nav() {
             </nav>
           </div>
           <nav className="nav-links" aria-label="Account">
-            {user && <NotificationBell />}
+            {user && status === 'ready' && <NotificationBell />}
             {user?.role === 'traveler' && (
               <NavLink to="/bookings" className="nav-link">
                 My trips

@@ -68,9 +68,12 @@ export function AuthProvider({ children }) {
     // Back to real data at once (synchronously), so the page being opened never asks the ended sandbox.
     setSandboxMode(false);
     setSandbox(null);
-    setUser(null); // the sandbox account is gone; the real one (if any) loads below
+    // "Loading" while the real account (if any) loads: protected pages wait instead of redirecting
+    // to sign-in, and the bell stops polling for the sandbox account.
+    setStatus('loading');
     await sandboxApi.end().catch(() => {});
     setUser(await currentUser());
+    setStatus('ready');
   }, []);
 
   const switchSandboxView = useCallback(async () => {
