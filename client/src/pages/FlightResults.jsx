@@ -36,7 +36,9 @@ export default function FlightResults() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const from = cityByCode(q.origin)?.city || q.origin;
   const to = cityByCode(q.destination)?.city || q.destination;
-  useDocumentTitle(`Flights ${from} to ${to}`);
+  // Opened without a complete search (e.g. /flights typed by hand): ask for one instead of erroring.
+  const incomplete = !q.origin || !q.destination || !q.date;
+  useDocumentTitle(incomplete ? 'Search flights' : `Flights ${from} to ${to}`);
 
   const party = readParty(q);
   const queryKey = JSON.stringify(q);
@@ -44,8 +46,8 @@ export default function FlightResults() {
   const { data, error, loading, reload } = useAsync(
     (signal) =>
       // A date that has already passed can't have bookable flights — skip the request.
-      pastDate
-        ? Promise.resolve({ results: [], total: 0, page: 1, pages: 1, unfilteredTotal: 0, pastDates: true, facets: { airlines: [], stops: [], minPrice: 0, maxPrice: 0 } })
+      pastDate || incomplete
+        ? Promise.resolve({ results: [], total: 0, page: 1, pages: 1, unfilteredTotal: 0, pastDates: pastDate, incomplete, facets: { airlines: [], stops: [], minPrice: 0, maxPrice: 0 } })
         : flightsApi.search(
         {
           origin: q.origin,
@@ -115,13 +117,19 @@ export default function FlightResults() {
       <div className="summary-bar">
         <div className="container spread">
           <div>
-            <p className="summary-route">
-              {from} <Icon name="arrowRight" size={16} /> {to}
-            </p>
-            <p className="small muted">
-              {q.date && formatDateString(q.date, { weekday: 'short' })} · {partyLabel(party)} ·{' '}
-              {q.cabin === 'business' ? 'Business' : 'Economy'}
-            </p>
+            {incomplete ? (
+              <p className="summary-route">Search flights</p>
+            ) : (
+              <>
+                <p className="summary-route">
+                  {from} <Icon name="arrowRight" size={16} /> {to}
+                </p>
+                <p className="small muted">
+                  {q.date && formatDateString(q.date, { weekday: 'short' })} · {partyLabel(party)} ·{' '}
+                  {q.cabin === 'business' ? 'Business' : 'Economy'}
+                </p>
+              </>
+            )}
           </div>
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditing((e) => !e)} aria-expanded={editing}>
             {editing ? 'Close' : 'Modify search'}
@@ -169,7 +177,19 @@ export default function FlightResults() {
           {data && (
             <div className={loading ? 'results-list is-loading' : 'results-list'}>
               {data.results.length === 0 &&
-                (data.tooFar ? (
+                (data.incomplete ? (
+                  <EmptyState
+                    title="Where would you like to fly?"
+                    icon="plane"
+                    action={
+                      <button type="button" className="btn btn-primary" onClick={() => setEditing(true)}>
+                        Search flights
+                      </button>
+                    }
+                  >
+                    Choose where you’re flying from and to, and a date.
+                  </EmptyState>
+                ) : data.tooFar ? (
                   <EmptyState
                     title="Flights can be booked up to 60 days ahead"
                     icon="calendar"

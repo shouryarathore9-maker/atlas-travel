@@ -29,12 +29,16 @@ export default function HotelResults() {
   const [q, update] = useResultParams(['stars', 'amenities']);
   const [editing, setEditing] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  useDocumentTitle(`Stays in ${q.city || 'India'}`);
+  // Opened without a complete search: ask for one instead of erroring.
+  const incomplete = !q.city || !q.checkIn || !q.checkOut;
+  useDocumentTitle(incomplete ? 'Search stays' : `Stays in ${q.city}`);
 
   const queryKey = JSON.stringify(q);
   const { data, error, loading, reload } = useAsync(
     (signal) =>
-      hotelsApi.search(
+      incomplete
+        ? Promise.resolve({ results: [], total: 0, page: 1, pages: 1, unfilteredTotal: 0, incomplete: true, facets: { amenities: [], stars: [], minPrice: 0, maxPrice: 0 } })
+        : hotelsApi.search(
         {
           city: q.city,
           checkIn: q.checkIn,
@@ -115,11 +119,13 @@ export default function HotelResults() {
       <div className="summary-bar">
         <div className="container spread">
           <div>
-            <p className="summary-route">{q.city}</p>
-            <p className="small muted">
-              {q.checkIn && formatDateString(q.checkIn, { year: undefined })} – {q.checkOut && formatDateString(q.checkOut, { year: undefined })} ·{' '}
-              {pluralize(guests, 'guest')} · {pluralize(Number(q.rooms) || 1, 'room')}
-            </p>
+            <p className="summary-route">{incomplete ? 'Search stays' : q.city}</p>
+            {!incomplete && (
+              <p className="small muted">
+                {formatDateString(q.checkIn, { year: undefined })} – {formatDateString(q.checkOut, { year: undefined })} · {pluralize(guests, 'guest')} ·{' '}
+                {pluralize(Number(q.rooms) || 1, 'room')}
+              </p>
+            )}
           </div>
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditing((e) => !e)} aria-expanded={editing}>
             {editing ? 'Close' : 'Modify search'}
@@ -167,7 +173,19 @@ export default function HotelResults() {
           {data && (
             <div className={loading ? 'results-list is-loading' : 'results-list'}>
               {data.results.length === 0 &&
-                (data.tooFar ? (
+                (data.incomplete ? (
+                  <EmptyState
+                    title="Where are you staying?"
+                    icon="building"
+                    action={
+                      <button type="button" className="btn btn-primary" onClick={() => setEditing(true)}>
+                        Search stays
+                      </button>
+                    }
+                  >
+                    Choose a city and your dates.
+                  </EmptyState>
+                ) : data.tooFar ? (
                   <EmptyState
                     title="Stays can be booked up to 60 days ahead"
                     icon="calendar"

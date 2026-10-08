@@ -5,6 +5,7 @@ Everything — inventory, reviews and payments — is seeded or simulated. No th
 
 - Product: [prd.md](prd.md) · System design: [architecture.md](architecture.md) · UI: [design.md](design.md) · How to work: [AGENTS.md](AGENTS.md)
 - Research: [docs/research/research-notes.md](docs/research/research-notes.md) (competitor screens and the homepage concept) · QA: [docs/QA-REPORT.md](docs/QA-REPORT.md)
+- **What's new for each kind of user (Phase 2):** [docs/user-guide.md](docs/user-guide.md) · Try the consoles without an account from the footer's **Try as …** links (private, self-deleting demos).
 
 ## Stack
 React 19 + Vite + React Router · Node + Express 5 · MongoDB (Mongoose) · JWT in an httpOnly cookie · Vitest, React Testing Library, Supertest · Hosted on Vercel with MongoDB Atlas
