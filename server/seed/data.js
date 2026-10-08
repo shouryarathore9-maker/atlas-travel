@@ -18,11 +18,13 @@ export const ROUTE_PAIRS = [
   ['BLR', 'HYD'], ['BLR', 'MAA'], ['BLR', 'CCU'], ['BLR', 'PNQ'], ['HYD', 'MAA'], ['CCU', 'HYD'],
 ];
 
+// aircraftConfig keys come from the platform catalogue (server/services/aircraft.js).
+// IndiGo flies the ATR 72-600 on routes shorter than 600 km.
 export const AIRLINES = [
-  { name: 'IndiGo', code: '6E', aircraft: 'Airbus A320neo', business: false },
-  { name: 'Air India', code: 'AI', aircraft: 'Airbus A321neo', business: true },
-  { name: 'Vistara', code: 'UK', aircraft: 'Airbus A320neo', business: true },
-  { name: 'SpiceJet', code: 'SG', aircraft: 'Boeing 737-800', business: false },
+  { name: 'IndiGo', code: '6E', slug: 'indigo', aircraftConfig: 'A320neo-1', shortHaulConfig: 'ATR72-600' },
+  { name: 'Air India', code: 'AI', slug: 'air-india', aircraftConfig: 'A321neo-2' },
+  { name: 'Vistara', code: 'UK', slug: 'vistara', aircraftConfig: 'A320neo-2' },
+  { name: 'SpiceJet', code: 'SG', slug: 'spicejet', aircraftConfig: 'B737-800-1' },
 ];
 
 export const MEALS = [

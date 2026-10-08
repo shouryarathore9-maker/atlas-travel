@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import Hotel from '../models/Hotel.js';
 import Review from '../models/Review.js';
-import { nightsBetween, todayIstString } from '../utils/dates.js';
+import { lastBookableDate, nightsBetween, todayIstString } from '../utils/dates.js';
 import { HttpError } from '../utils/httpError.js';
 import { csv, dateString, optionalNumber, paginate, pagination } from '../utils/query.js';
 
@@ -25,6 +25,7 @@ export const hotelSearchSchema = z
 // Can `rooms` rooms of this type hold the whole party?
 export function roomFits(roomType, { adults, children, rooms }) {
   return (
+    !roomType.salesStopped &&
     roomType.roomsAvailable >= rooms &&
     roomType.occupancy.adults * rooms >= adults &&
     (roomType.occupancy.adults + roomType.occupancy.children) * rooms >= adults + children
@@ -44,18 +45,21 @@ export async function searchHotels(req, res) {
   const q = req.validated.query;
   const nights = nightsBetween(q.checkIn, q.checkOut);
   // Past stays can't be booked, so they have no results (the client shows a friendly message).
-  if (q.checkIn < todayIstString()) {
+  // Beyond the 60-day horizon, likewise.
+  const pastDates = q.checkIn < todayIstString();
+  const tooFar = q.checkIn > lastBookableDate();
+  if (pastDates || tooFar) {
     return res.json({
       results: [],
       total: 0,
       page: 1,
       pages: 1,
       unfilteredTotal: 0,
-      pastDates: true,
+      ...(pastDates ? { pastDates: true } : { tooFar: true }),
       facets: { amenities: [], stars: [], minPrice: 0, maxPrice: 0 },
     });
   }
-  const candidates = await Hotel.find({ city: new RegExp(`^${escapeRegex(q.city)}$`, 'i') }).lean();
+  const candidates = await Hotel.find({ city: new RegExp(`^${escapeRegex(q.city)}$`, 'i'), salesStopped: { $ne: true } }).lean();
 
   const available = candidates
     .map((hotel) => {
@@ -116,6 +120,7 @@ export const featuredQuerySchema = z.object({
 export async function listFeatured(req, res) {
   const { limit } = req.validated.query;
   const hotels = await Hotel.find({
+    salesStopped: { $ne: true },
     starRating: { $gte: FEATURED_MIN_STARS },
     'rating.average': { $gte: FEATURED_MIN_RATING },
   })

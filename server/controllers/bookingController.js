@@ -2,6 +2,8 @@ import mongoose from 'mongoose';
 import Booking from '../models/Booking.js';
 import { HttpError } from '../utils/httpError.js';
 import { computeRefund, releaseInventory } from '../services/bookingService.js';
+import { notifySupplier, notifyUser } from '../services/notify.js';
+import { formatInr } from '../utils/format.js';
 
 export async function listMyBookings(req, res) {
   const bookings = await Booking.find({ userId: req.user._id }).sort({ createdAt: -1 }).limit(100).lean();
@@ -37,5 +39,17 @@ export async function cancelBooking(req, res) {
   if (!updated) throw new HttpError(400, 'This booking is already cancelled.', 'NOT_CANCELLABLE');
 
   await releaseInventory(booking);
+  await notifyUser(booking.userId, {
+    type: 'refund.receipt',
+    title: `Refund of ${formatInr(refundAmount)} · ${booking.bookingReference}`,
+    body: `You cancelled ${booking.itemSummary.title}. ${formatInr(refundAmount)} of ${formatInr(booking.fareBreakdown.total)} will be refunded (simulated).`,
+    link: '/bookings',
+  });
+  await notifySupplier(booking.supplierId, {
+    type: 'booking.cancelled_by_traveller',
+    title: `Cancelled by the traveller · ${booking.bookingReference}`,
+    body: `${booking.itemSummary.title} · ${booking.itemSummary.subtitle}`,
+    link: booking.type === 'flight' ? '/supplier/departures' : '/supplier/hotel',
+  });
   res.json({ booking: updated });
 }

@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import Flight from '../models/Flight.js';
 import Hotel from '../models/Hotel.js';
-import { DAY_MS, istMidnight, nightsBetween } from '../utils/dates.js';
+import { DAY_MS, istMidnight, lastBookableDate, nightsBetween } from '../utils/dates.js';
 import { HttpError } from '../utils/httpError.js';
 import { roomFits } from '../controllers/hotelController.js';
 
@@ -37,6 +37,8 @@ export function priceFlight(flight, { fareType, travellers }) {
   assert(fare, 'That fare is no longer offered on this flight.');
   assert(fare.seatsAvailable >= travellers.length, 'Not enough seats left on this fare.', 'SOLD_OUT');
   assert(new Date(flight.departureTime) > new Date(), 'This flight has already departed.');
+  assert(flight.status !== 'cancelled', 'This flight was cancelled by the airline.', 'NOT_ON_SALE');
+  assert(!flight.salesStopped, 'The airline has stopped sales on this flight.', 'NOT_ON_SALE');
 
   const seats = travellers.map((t) => t.seat).filter(Boolean);
   assert(new Set(seats).size === seats.length, 'Each traveller needs a different seat.');
@@ -82,6 +84,8 @@ export function priceHotel(hotel, { roomTypeName, rooms, checkIn, checkOut, adul
   assert(nights >= 1, 'Check-out must be after check-in.');
   assert(nights <= 30, 'Stays are limited to 30 nights.');
   assert(istMidnight(checkIn).getTime() + DAY_MS > Date.now(), 'Check-in date is in the past.');
+  assert(checkIn <= lastBookableDate(), 'Stays can be booked up to 60 days ahead.');
+  assert(!hotel.salesStopped && !room.salesStopped, 'This hotel has stopped taking bookings for that room.', 'NOT_ON_SALE');
   assert(room.roomsAvailable >= rooms, `Only ${room.roomsAvailable} room(s) of this type are available.`, 'SOLD_OUT');
   assert(roomFits(room, { adults, children, rooms }), 'These rooms cannot hold your whole party. Add rooms or pick a larger room type.');
 

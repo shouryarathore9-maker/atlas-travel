@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from './Icon.jsx';
 import { CITIES } from '../lib/cities.js';
-import { addDays, isDateString, todayIst } from '../lib/dates.js';
+import { addDays, isDateString, lastBookableDate, todayIst } from '../lib/dates.js';
 
 export function validateHotelSearch({ city, checkIn, checkOut, adults, rooms }) {
   if (!city) return { field: 'city', message: 'Choose a destination' };
   if (!isDateString(checkIn)) return { field: 'checkIn', message: 'Choose a check-in date' };
   if (checkIn < todayIst()) return { field: 'checkIn', message: 'Check-in can’t be in the past' };
+  if (checkIn > lastBookableDate()) return { field: 'checkIn', message: 'Stays can be booked up to 60 days ahead' };
   if (!isDateString(checkOut)) return { field: 'checkOut', message: 'Choose a check-out date' };
   if (checkOut <= checkIn) return { field: 'checkOut', message: 'Check-out must be after check-in' };
   if (Number(rooms) > Number(adults)) return { field: 'rooms', message: 'Each room needs at least one adult' };
@@ -59,7 +60,7 @@ export default function HotelSearchForm({ initial = {}, compact = false }) {
           <Icon name="calendar" />
           <div className="pill-body">
             <label htmlFor="hs-in">Check-in</label>
-            <input id="hs-in" type="date" min={todayIst()} value={values.checkIn} onChange={set('checkIn')} {...aria('checkIn')} />
+            <input id="hs-in" type="date" min={todayIst()} max={lastBookableDate()} value={values.checkIn} onChange={set('checkIn')} {...aria('checkIn')} />
           </div>
         </div>
         <div className={pillClass('checkOut')}>

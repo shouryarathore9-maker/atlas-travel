@@ -3,14 +3,17 @@ import request from 'supertest';
 import { createApp } from '../app.js';
 import Flight from '../models/Flight.js';
 import Hotel from '../models/Hotel.js';
+import Service from '../models/Service.js';
+import Supplier from '../models/Supplier.js';
 import User from '../models/User.js';
 import { addDays, istMidnight, todayIstString } from '../utils/dates.js';
 
 export const app = createApp();
 export const PASSWORD = 'Secret123';
 
-export async function loggedInAgent({ role = 'traveler', email = `${role}-${Date.now()}@example.com` } = {}) {
-  await User.create({ name: 'Test User', email, role, passwordHash: await bcrypt.hash(PASSWORD, 4) });
+let seq = 0;
+export async function loggedInAgent({ role = 'traveler', email = `${role}-${Date.now()}-${++seq}@example.com`, supplierId = null } = {}) {
+  await User.create({ name: 'Test User', email, role, supplierId, passwordHash: await bcrypt.hash(PASSWORD, 4) });
   const agent = request.agent(app);
   await agent.post('/api/auth/login').send({ email, password: PASSWORD }).expect(200);
   return agent;
@@ -65,3 +68,55 @@ export function hotelFixture(overrides = {}) {
 
 export const createFlight = (overrides) => Flight.create(flightFixture(overrides));
 export const createHotel = (overrides) => Hotel.create(hotelFixture(overrides));
+
+// A supplier organisation and its signed-in manager.
+export async function supplierWithManager(kind = 'airline', overrides = {}) {
+  const base =
+    kind === 'airline'
+      ? { kind, name: 'IndiGo', code: '6E', slug: `indigo-${++seq}` }
+      : { kind, name: 'Test Courtyard', slug: `test-courtyard-${++seq}` };
+  const supplier = await Supplier.create({ ...base, ...overrides });
+  if (kind === 'hotel' && !overrides.hotelId) {
+    const hotel = await createHotel({ supplierId: supplier._id, name: supplier.name });
+    supplier.hotelId = hotel._id;
+    await supplier.save();
+  }
+  const agent = await loggedInAgent({ role: kind === 'airline' ? 'airline_manager' : 'hotel_manager', supplierId: supplier._id });
+  return { supplier, agent };
+}
+
+export function serviceFixture(overrides = {}) {
+  return {
+    airline: 'IndiGo',
+    flightNumber: '6E 204',
+    origin: { code: 'DEL', city: 'Delhi', airport: 'IGI' },
+    destination: { code: 'BOM', city: 'Mumbai', airport: 'CSMIA' },
+    aircraftConfig: 'A320neo-1',
+    departureMinute: 9 * 60,
+    durationMinutes: 130,
+    stops: 0,
+    daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+    startDate: todayIstString(),
+    interim: { basePrice: 5000, mealOptions: [{ name: 'Vegetable biryani', price: 350, isVeg: true }] },
+    ...overrides,
+  };
+}
+
+export const createService = (overrides) => Service.create(serviceFixture(overrides));
+
+// Request body for POST/PUT /api/supplier/services
+export function serviceInput(overrides = {}) {
+  return {
+    flightNumber: '6E 245',
+    origin: 'DEL',
+    destination: 'BOM',
+    aircraftConfig: 'A320neo-1',
+    departureTime: '09:15',
+    durationMinutes: 130,
+    stops: 0,
+    daysOfWeek: [1, 3, 5],
+    startDate: todayIstString(),
+    endDate: null,
+    ...overrides,
+  };
+}

@@ -2,6 +2,9 @@
 export const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
+// Flights and hotel stays can be booked from today up to this many days ahead (today counts as day 1).
+export const BOOKING_HORIZON_DAYS = 60;
+
 // "2026-10-01" -> UTC instant of 00:00 IST on that day
 export function istMidnight(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -19,6 +22,11 @@ export function todayIstString(now = Date.now()) {
 
 export function addDays(dateStr, days) {
   return new Date(istMidnight(dateStr).getTime() + days * DAY_MS + IST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+// Last bookable date: today + 59 days with a 60-day horizon.
+export function lastBookableDate(now = Date.now()) {
+  return addDays(todayIstString(now), BOOKING_HORIZON_DAYS - 1);
 }
 
 export function nightsBetween(checkIn, checkOut) {

@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { Router } from 'express';
-import { extendFlightWindow } from '../services/flightWindow.js';
+import { runDailyJob } from '../services/dailyJob.js';
+import { runWithContext } from '../utils/context.js';
 import { HttpError } from '../utils/httpError.js';
 
 const router = Router();
@@ -15,9 +16,11 @@ function requireCronSecret(req, res, next) {
   next();
 }
 
-router.get('/extend-flights', requireCronSecret, async (req, res) => {
-  const result = await extendFlightWindow();
-  console.log('extend-flights', JSON.stringify(result));
+// The daily maintenance job works across all data (including sweeping sandboxes), so it runs
+// outside the per-request sandbox scope.
+router.get('/daily', requireCronSecret, async (req, res) => {
+  const result = await runWithContext(undefined, () => runDailyJob());
+  console.log('daily-job', JSON.stringify(result));
   res.json(result);
 });
 

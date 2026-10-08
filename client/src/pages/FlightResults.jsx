@@ -165,7 +165,19 @@ export default function FlightResults() {
           {data && (
             <div className={loading ? 'results-list is-loading' : 'results-list'}>
               {data.results.length === 0 &&
-                (data.pastDates ? (
+                (data.tooFar ? (
+                  <EmptyState
+                    title="Flights can be booked up to 60 days ahead"
+                    icon="calendar"
+                    action={
+                      <button type="button" className="btn btn-secondary" onClick={() => setEditing(true)}>
+                        Pick an earlier date
+                      </button>
+                    }
+                  >
+                    Choose a date within the next 60 days to see flights.
+                  </EmptyState>
+                ) : data.pastDates ? (
                   <EmptyState
                     title="That date has already passed"
                     icon="calendar"
@@ -186,7 +198,7 @@ export default function FlightResults() {
                       </button>
                     }
                   >
-                    Try another date or a nearby city. Seeded flights cover the next three weeks.
+                    Try another date or a nearby city.
                   </EmptyState>
                 ) : (
                   <EmptyState

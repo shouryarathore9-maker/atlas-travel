@@ -18,9 +18,15 @@ const Confirmation = lazy(() => import('./pages/Confirmation.jsx'));
 const MyBookings = lazy(() => import('./pages/MyBookings.jsx'));
 const Login = lazy(() => import('./pages/AuthPages.jsx').then((m) => ({ default: m.Login })));
 const Signup = lazy(() => import('./pages/AuthPages.jsx').then((m) => ({ default: m.Signup })));
-const AdminList = lazy(() => import('./pages/admin/AdminList.jsx'));
-const FlightForm = lazy(() => import('./pages/admin/FlightForm.jsx'));
-const HotelForm = lazy(() => import('./pages/admin/HotelForm.jsx'));
+// Consoles (Phase 2) are only loaded by managers and admins.
+const SupplierConsole = lazy(() => import('./pages/supplier/SupplierConsole.jsx'));
+const SupplierOverview = lazy(() => import('./pages/supplier/SupplierOverview.jsx'));
+const Services = lazy(() => import('./pages/supplier/Services.jsx'));
+const ServiceForm = lazy(() => import('./pages/supplier/ServiceForm.jsx'));
+const Departures = lazy(() => import('./pages/supplier/Departures.jsx'));
+const HotelProperty = lazy(() => import('./pages/supplier/HotelProperty.jsx'));
+const AdminConsole = lazy(() => import('./pages/admin/AdminConsole.jsx'));
+const AuditLog = lazy(() => import('./pages/admin/AuditLog.jsx'));
 
 function ScrollToTop() {
   const { pathname, hash } = useLocation();
@@ -71,16 +77,21 @@ export default function App() {
           <Route path="/hotels/:id" element={<HotelDetail />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
-          <Route path="/checkout" element={authed(<Checkout />)} />
-          <Route path="/bookings" element={authed(<MyBookings />)} />
-          <Route path="/bookings/:reference/confirmation" element={authed(<Confirmation />)} />
-          <Route path="/admin" element={<Navigate to="/admin/flights" replace />} />
-          <Route path="/admin/flights" element={authed(<AdminList resource="flights" key="flights" />, 'admin')} />
-          <Route path="/admin/flights/new" element={authed(<FlightForm />, 'admin')} />
-          <Route path="/admin/flights/:id" element={authed(<FlightForm />, 'admin')} />
-          <Route path="/admin/hotels" element={authed(<AdminList resource="hotels" key="hotels" />, 'admin')} />
-          <Route path="/admin/hotels/new" element={authed(<HotelForm />, 'admin')} />
-          <Route path="/admin/hotels/:id" element={authed(<HotelForm />, 'admin')} />
+          <Route path="/checkout" element={authed(<Checkout />, 'traveler')} />
+          <Route path="/bookings" element={authed(<MyBookings />, 'traveler')} />
+          <Route path="/bookings/:reference/confirmation" element={authed(<Confirmation />, 'traveler')} />
+          <Route path="/supplier" element={authed(<SupplierConsole />, 'manager')}>
+            <Route index element={<SupplierOverview />} />
+            <Route path="services" element={<Services />} />
+            <Route path="services/new" element={<ServiceForm />} />
+            <Route path="services/:id" element={<ServiceForm key="edit" />} />
+            <Route path="departures" element={<Departures />} />
+            <Route path="hotel" element={<HotelProperty />} />
+          </Route>
+          <Route path="/admin" element={authed(<AdminConsole />, 'admin')}>
+            <Route index element={<Navigate to="/admin/audit" replace />} />
+            <Route path="audit" element={<AuditLog />} />
+          </Route>
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>

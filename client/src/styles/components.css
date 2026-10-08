@@ -517,7 +517,12 @@ legend {
 }
 @media (min-width: 768px) {
   .nav-user {
-    display: inline;
+    display: inline-block;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
     font-size: 0.9rem;
     opacity: 0.85;
   }
@@ -563,4 +568,19 @@ legend {
   font-family: var(--font-heading);
   color: rgba(23, 34, 31, 0.55);
   font-size: 1.1rem;
+}
+.nav-links .btn,
+.nav-link {
+  white-space: nowrap;
+}
+.nav-link::first-letter {
+  text-transform: uppercase;
+}
+@media (max-width: 767px) {
+  .hide-phone {
+    display: none;
+  }
+  .nav-links {
+    gap: var(--space-1);
+  }
 }

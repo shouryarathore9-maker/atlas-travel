@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { AIRCRAFT, cabinCapacity, hasCabin, seatLetters } from '../services/aircraft.js';
 import { addDays, istMidnight, todayIstString } from '../utils/dates.js';
 import {
   AIRLINES,
@@ -31,9 +32,19 @@ export function createRng(seed = 42) {
   return { next, int, pick, sample };
 }
 
+// FNV-1a string hash → PRNG seed, so a departure's details depend only on (service, date).
+function hashSeed(text) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
 const round = (n, step) => Math.round(n / step) * step;
 
-function distanceKm(a, b) {
+export function distanceKm(a, b) {
   const rad = Math.PI / 180;
   const dLat = (b.lat - a.lat) * rad;
   const dLon = (b.lon - a.lon) * rad;
@@ -41,14 +52,34 @@ function distanceKm(a, b) {
   return 6371 * 2 * Math.asin(Math.sqrt(h));
 }
 
-const SEAT_LETTERS = 'ABCDEF';
+export const slugify = (text) =>
+  text
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^\w\s-]/g, '')
+    .trim()
+    .replace(/[\s_]+/g, '-')
+    .replace(/-+/g, '-');
+
 const DEPARTURE_SLOTS = [6 * 60 + 5, 9 * 60 + 40, 14 * 60 + 15, 19 * 60 + 50];
 
-export function generateFlights({ days = 21, now = Date.now(), rng = createRng(7) } = {}) {
+export function generateAirlineSuppliers() {
+  return AIRLINES.map((airline) => ({
+    _id: new mongoose.Types.ObjectId(),
+    kind: 'airline',
+    name: airline.name,
+    code: airline.code,
+    slug: airline.slug,
+  }));
+}
+
+// The Phase 1 timetable as recurring services: 36 routes × 4 daily slots, each with its own airline.
+export function generateServices({ airlineSuppliers, startDate = todayIstString(), rng = createRng(7) } = {}) {
   const byCode = Object.fromEntries(CITIES.map((c) => [c.code, c]));
+  const supplierByName = Object.fromEntries(airlineSuppliers.map((s) => [s.name, s]));
   const routes = ROUTE_PAIRS.flatMap(([a, b]) => [[a, b], [b, a]]);
-  const today = todayIstString(now);
-  const flights = [];
+  const usedNumbers = new Set();
+  const services = [];
 
   routes.forEach(([from, to], routeIndex) => {
     const origin = byCode[from];
@@ -57,91 +88,141 @@ export function generateFlights({ days = 21, now = Date.now(), rng = createRng(7
     const baseDuration = round(45 + km / 12, 5);
     const basePrice = round(2200 + km * 3.6, 50);
 
-    // Four fixed daily services per route, each with its own airline, number and timing.
-    const services = DEPARTURE_SLOTS.map((slot, i) => {
+    DEPARTURE_SLOTS.forEach((slot, i) => {
       const airline = AIRLINES[(routeIndex + i) % AIRLINES.length];
       const stops = i === 3 && rng.next() < 0.5 ? 1 : 0;
-      return {
-        airline,
+      const shortHaul = airline.shortHaulConfig && km < AIRCRAFT[airline.shortHaulConfig].maxRouteKm && stops === 0;
+      let flightNumber;
+      do flightNumber = `${airline.code} ${rng.int(101, 989)}`;
+      while (usedNumbers.has(flightNumber));
+      usedNumbers.add(flightNumber);
+      services.push({
+        _id: new mongoose.Types.ObjectId(),
+        supplierId: supplierByName[airline.name]._id,
+        airline: airline.name,
+        flightNumber,
+        origin: { code: origin.code, city: origin.city, airport: origin.airport },
+        destination: { code: destination.code, city: destination.city, airport: destination.airport },
+        aircraftConfig: shortHaul ? airline.shortHaulConfig : airline.aircraftConfig,
+        departureMinute: slot + rng.int(-20, 20),
+        durationMinutes: baseDuration + (stops ? 95 : 0) + (shortHaul ? 15 : 0),
         stops,
-        minuteOfDay: slot + rng.int(-20, 20),
-        flightNumber: `${airline.code} ${rng.int(101, 989)}`,
-        duration: baseDuration + (stops ? 95 : 0),
-        priceFactor: 0.9 + rng.next() * 0.3 - stops * 0.08,
-        meals: rng.sample(MEALS, rng.int(3, 5)),
-      };
+        daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+        startDate,
+        endDate: null,
+        status: 'active',
+        rating: { average: 0, count: 0 },
+        interim: {
+          basePrice: round(basePrice * (0.9 + rng.next() * 0.3 - stops * 0.08), 50),
+          mealOptions: rng.sample(MEALS, rng.int(3, 5)),
+        },
+      });
     });
-
-    for (let day = 0; day < days; day++) {
-      const dateStr = addDays(today, day);
-      const midnight = istMidnight(dateStr).getTime();
-      for (const service of services) {
-        const departure = new Date(midnight + service.minuteOfDay * 60000);
-        if (departure.getTime() < now + 2 * 3600 * 1000) continue;
-        const arrival = new Date(departure.getTime() + service.duration * 60000);
-        const urgency = day < 3 ? 1.18 : day < 7 ? 1.06 : 1;
-        const saver = round(basePrice * service.priceFactor * urgency * (0.92 + rng.next() * 0.16), 50);
-
-        const fareOptions = [
-          {
-            type: 'Saver',
-            price: saver,
-            cabinBaggageKg: 7,
-            checkinBaggageKg: 15,
-            cancellationPolicy: { freeUntilHoursBeforeDeparture: 0, feeAfterCutoff: 3500 },
-            dateChangeFee: 3000,
-            seatsAvailable: rng.int(20, 60),
-          },
-          {
-            type: 'Flexi',
-            price: round(saver * 1.22, 50),
-            cabinBaggageKg: 7,
-            checkinBaggageKg: 20,
-            cancellationPolicy: { freeUntilHoursBeforeDeparture: 24, feeAfterCutoff: 1500 },
-            dateChangeFee: 0,
-            seatsAvailable: rng.int(10, 30),
-          },
-        ];
-        if (service.airline.business) {
-          fareOptions.push({
-            type: 'Business',
-            price: round(saver * 3.1, 50),
-            cabinBaggageKg: 12,
-            checkinBaggageKg: 35,
-            cancellationPolicy: { freeUntilHoursBeforeDeparture: 6, feeAfterCutoff: 1000 },
-            dateChangeFee: 0,
-            seatsAvailable: rng.int(6, 12),
-          });
-        }
-
-        const unavailable = new Set();
-        const taken = rng.int(12, 30);
-        while (unavailable.size < taken) unavailable.add(`${rng.int(1, 30)}${SEAT_LETTERS[rng.int(0, 5)]}`);
-
-        flights.push({
-          _id: new mongoose.Types.ObjectId(),
-          airline: service.airline.name,
-          flightNumber: service.flightNumber,
-          aircraftType: service.airline.aircraft,
-          origin: { code: origin.code, city: origin.city, airport: origin.airport },
-          destination: { code: destination.code, city: destination.city, airport: destination.airport },
-          departureTime: departure,
-          arrivalTime: arrival,
-          durationMinutes: service.duration,
-          stops: service.stops,
-          fareOptions,
-          mealOptions: service.meals,
-          seatMap: {
-            rows: 30,
-            columns: 6,
-            unavailableSeats: [...unavailable],
-            seatPricing: { window: 350, aisle: 300, middle: 0 },
-          },
-          rating: { average: 0, count: 0 },
-        });
-      }
-    }
   });
+  return services;
+}
+
+// Is `dateStr` a day this service operates?
+export function operatesOn(service, dateStr) {
+  if (service.status !== 'active') return false;
+  if (dateStr < service.startDate) return false;
+  if (service.endDate && dateStr > service.endDate) return false;
+  const weekday = new Date(`${dateStr}T00:00:00Z`).getUTCDay();
+  return service.daysOfWeek.includes(weekday);
+}
+
+// One dated departure of a service. Deterministic per (service, date). Fares, seat map and meals
+// are the Phase 1 interim values until the pricing engine (Stage 2) and cabin seat maps (Stage 3).
+export function departureFor(service, dateStr, { now = Date.now() } = {}) {
+  const departure = new Date(istMidnight(dateStr).getTime() + service.departureMinute * 60000);
+  if (departure.getTime() < now + 2 * 3600 * 1000) return null;
+  const rng = createRng(hashSeed(`${service._id}|${dateStr}`));
+  const daysAhead = Math.round((istMidnight(dateStr) - istMidnight(todayIstString(now))) / 86400000);
+  const urgency = daysAhead < 3 ? 1.18 : daysAhead < 7 ? 1.06 : 1;
+  const saver = round((service.interim?.basePrice || 4000) * urgency * (0.92 + rng.next() * 0.16), 50);
+  const economy = AIRCRAFT[service.aircraftConfig].cabins.economy;
+  const letters = seatLetters(economy);
+  const economySeats = cabinCapacity(service.aircraftConfig, 'economy');
+
+  const fareOptions = [
+    {
+      type: 'Saver',
+      price: saver,
+      cabinBaggageKg: 7,
+      checkinBaggageKg: 15,
+      cancellationPolicy: { freeUntilHoursBeforeDeparture: 0, feeAfterCutoff: 3500 },
+      dateChangeFee: 3000,
+      seatsAvailable: Math.min(rng.int(20, 60), economySeats),
+    },
+    {
+      type: 'Flexi',
+      price: round(saver * 1.22, 50),
+      cabinBaggageKg: 7,
+      checkinBaggageKg: 20,
+      cancellationPolicy: { freeUntilHoursBeforeDeparture: 24, feeAfterCutoff: 1500 },
+      dateChangeFee: 0,
+      seatsAvailable: rng.int(10, 30),
+    },
+  ];
+  if (hasCabin(service.aircraftConfig, 'business')) {
+    fareOptions.push({
+      type: 'Business',
+      price: round(saver * 3.1, 50),
+      cabinBaggageKg: 12,
+      checkinBaggageKg: 35,
+      cancellationPolicy: { freeUntilHoursBeforeDeparture: 6, feeAfterCutoff: 1000 },
+      dateChangeFee: 0,
+      seatsAvailable: Math.min(rng.int(6, 12), cabinCapacity(service.aircraftConfig, 'business')),
+    });
+  }
+
+  // Interim seat map: the economy cabin's size, numbered from row 1 (Stage 3 draws real cabins).
+  const rows = economy.rows.length;
+  const unavailable = new Set();
+  const taken = Math.min(rng.int(12, 30), Math.floor((rows * letters.length) / 3));
+  while (unavailable.size < taken) unavailable.add(`${rng.int(1, rows)}${'ABCDEF'[rng.int(0, letters.length - 1)]}`);
+
+  return {
+    _id: new mongoose.Types.ObjectId(),
+    supplierId: service.supplierId,
+    serviceId: service._id,
+    date: dateStr,
+    aircraftConfig: service.aircraftConfig,
+    airline: service.airline,
+    flightNumber: service.flightNumber,
+    aircraftType: AIRCRAFT[service.aircraftConfig].name,
+    origin: service.origin,
+    destination: service.destination,
+    departureTime: departure,
+    arrivalTime: new Date(departure.getTime() + service.durationMinutes * 60000),
+    durationMinutes: service.durationMinutes,
+    stops: service.stops,
+    status: 'scheduled',
+    salesStopped: false,
+    fareOptions,
+    mealOptions: service.interim?.mealOptions || MEALS.slice(0, 4),
+    seatMap: {
+      rows,
+      columns: letters.length,
+      unavailableSeats: [...unavailable],
+      seatPricing: { window: 350, aisle: 300, middle: 0 },
+    },
+    rating: service.rating || { average: 0, count: 0 },
+  };
+}
+
+// Every departure of these services in the window [today, today + days).
+export function generateDepartures(services, { days = 60, now = Date.now() } = {}) {
+  const today = todayIstString(now);
+  const flights = [];
+  for (let day = 0; day < days; day++) {
+    const dateStr = addDays(today, day);
+    for (const service of services) {
+      if (!operatesOn(service, dateStr)) continue;
+      const flight = departureFor(service, dateStr, { now });
+      if (flight) flights.push(flight);
+    }
+  }
   return flights;
 }
 
@@ -165,6 +246,7 @@ export function generateHotels({ rng = createRng(11) } = {}) {
       const roomTypes = ROOM_TYPES.slice(0, stars === 3 ? 2 : 3).map((room) => {
         const price = round(nightly * room.factor, 100);
         const freeDays = stars === 3 ? rng.int(0, 1) : rng.int(1, 3);
+        const rooms = rng.int(3, 10);
         return {
           name: room.name,
           occupancy: room.occupancy,
@@ -174,7 +256,8 @@ export function generateHotels({ rng = createRng(11) } = {}) {
           price,
           taxesAndFees: round(price * (price > 7500 ? 0.18 : 0.12), 10),
           cancellationPolicy: { freeUntilDaysBeforeCheckIn: freeDays, feeAfterCutoff: price },
-          roomsAvailable: rng.int(3, 10),
+          roomsAvailable: rooms,
+          roomsTotal: rooms,
         };
       });
       const photos = [0, 1, 2].map((k) => `/images/seed/hotels/hotel-${((photoCursor + k) % HOTEL_PHOTO_COUNT) + 1}.jpg`);
@@ -200,6 +283,16 @@ export function generateHotels({ rng = createRng(11) } = {}) {
   return hotels;
 }
 
+export function generateHotelSuppliers(hotels) {
+  return hotels.map((hotel) => ({
+    _id: new mongoose.Types.ObjectId(),
+    kind: 'hotel',
+    name: hotel.name,
+    hotelId: hotel._id,
+    slug: slugify(hotel.name),
+  }));
+}
+
 function reviewsFor(itemType, item, count, ratingPool, comments, rng, now) {
   return Array.from({ length: count }, () => {
     const rating = rng.pick(ratingPool);
@@ -215,8 +308,9 @@ function reviewsFor(itemType, item, count, ratingPool, comments, rng, now) {
   });
 }
 
-// Generates reviews and writes each item's rating summary in place.
-export function generateReviews(flights, hotels, { rng = createRng(23), now = Date.now() } = {}) {
+// Reviews belong to services (every departure of a flight number shares them) and hotels.
+// Writes each item's rating summary in place.
+export function generateReviews(services, hotels, { rng = createRng(23), now = Date.now() } = {}) {
   const reviews = [];
   const apply = (item, list) => {
     item.rating = list.length
@@ -224,8 +318,8 @@ export function generateReviews(flights, hotels, { rng = createRng(23), now = Da
       : { average: 0, count: 0 };
     reviews.push(...list);
   };
-  for (const flight of flights) {
-    apply(flight, reviewsFor('flight', flight, rng.int(0, 4), [5, 5, 4, 4, 4, 3, 3, 2], FLIGHT_REVIEWS, rng, now));
+  for (const service of services) {
+    apply(service, reviewsFor('service', service, rng.int(0, 4), [5, 5, 4, 4, 4, 3, 3, 2], FLIGHT_REVIEWS, rng, now));
   }
   for (const hotel of hotels) {
     const pool = hotel.starRating === 5 ? [5, 5, 5, 4, 4, 3] : hotel.starRating === 4 ? [5, 4, 4, 4, 3, 3] : [4, 4, 3, 3, 3, 2];

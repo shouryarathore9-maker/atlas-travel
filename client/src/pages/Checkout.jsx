@@ -196,6 +196,10 @@ export default function Checkout() {
                       <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setStatus({ state: 'idle' }); setStep('details'); }}>
                         Edit details
                       </button>
+                    ) : status.error.code === 'STAY_LIMIT' ? (
+                      <Link to="/bookings" className="btn btn-secondary btn-sm">
+                        View my trips
+                      </Link>
                     ) : ['NETWORK', 'SERVER_ERROR', 'RATE_LIMITED'].includes(status.error.code) ? (
                       <button type="button" className="btn btn-secondary btn-sm" onClick={() => setStatus({ state: 'idle' })}>
                         Try again

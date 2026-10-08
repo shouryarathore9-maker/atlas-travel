@@ -8,7 +8,7 @@
     "dev": "nodemon index.js",
     "start": "node index.js",
     "seed": "node seed/index.js",
-    "extend-flights": "node seed/extend.js",
+    "daily": "node seed/daily.js",
     "test": "vitest run",
     "lint": "eslint ."
   },

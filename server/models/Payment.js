@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { sandboxScope } from './plugins/sandboxScope.js';
 
 // Mock payments only. No card or UPI details are ever stored.
 const paymentSchema = new mongoose.Schema({
@@ -10,5 +11,7 @@ const paymentSchema = new mongoose.Schema({
   transactionId: { type: String, required: true },
   timestamp: { type: Date, default: Date.now },
 });
+
+paymentSchema.plugin(sandboxScope);
 
 export default mongoose.model('Payment', paymentSchema);

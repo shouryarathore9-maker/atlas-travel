@@ -13,4 +13,8 @@ export function nightsBetween(checkIn, checkOut) {
   return Math.round((new Date(checkOut) - new Date(checkIn)) / DAY_MS);
 }
 
+// Flights and stays can be booked up to 60 days ahead (prd.md → Booking limits); today is day 1.
+export const BOOKING_HORIZON_DAYS = 60;
+export const lastBookableDate = () => addDays(todayIst(), BOOKING_HORIZON_DAYS - 1);
+
 export const isDateString = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || '');

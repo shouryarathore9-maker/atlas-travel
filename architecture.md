@@ -517,6 +517,16 @@ Changes made while building the MVP. Each is additive or a clarification; nothin
 13. **Hotel search with a past check-in** returns no results (`pastDates: true`) so the UI can explain why.
 14. **Seed flights** are dated departures for the next `SEED_DAYS` (default 21) days, kept full by the daily cron job. *(Phase 2: 60 days, materialised from services.)*
 
+## Phase 2 Implementation Deviations (recorded per AGENTS.md)
+Stage 1 (foundations):
+1. **Sandbox isolation is automatic, not a throwing guard.** Every API request runs in an `AsyncLocalStorage` context (`server/utils/context.js`); the `sandboxScope` Mongoose plugin adds `sandboxId = <request's sandbox or null>` to every query, aggregation and new document of a sandboxable model. A real request can't see or change sandbox data and a sandbox request can't reach real data even with a real id. A query naming a *different* sandbox throws. Code outside a request (seed, tests, the daily job) is not scoped. `bulkWrite` isn't covered by Mongoose middleware, so request code using it puts `sandboxId` in each filter itself.
+2. **Interim prices until Stage 2/3.** Departures still carry Phase 1-style `fareOptions`, `mealOptions` and a single-cabin `seatMap` (sized from the aircraft's economy cabin), generated from `Service.interim`; hotels keep `roomTypes[].price` and `cancellationPolicy`. The pricing engine (Stage 2) and cabin seat maps (Stage 3) remove them as listed in Phase 2 Data-Model Changes.
+3. **Booking** gains `roomsReturned` (hotel rooms given back after check-out, exactly once) and `isSynthetic` now.
+4. **Extra endpoints:** `GET /api/notifications/unread-count` (the bell's cheap poll), `GET /api/supplier/catalogue` (airports, aircraft, amenity lists and the photo gallery for console forms), `GET /api/admin/suppliers` (audit-log filter). Supplier routes so far: overview, services CRUD, departures list + stop/resume sales, hotel property and rooms.
+5. **`MONGODB_DB`** (optional env var) selects a database other than the one in `MONGODB_URI`; local development uses `travel_app_phase2` so seeding never touches live data.
+6. **Manager accounts** are named after their supplier ("IndiGo manager"); the header shows a staff account's full name rather than a first name.
+7. **Measured after Stage 1 seed (2026-10-08, `travel_app_phase2`):** 14.90 MB data + 1.05 MB indexes; 8,568 departures (avg 1.7 KB, still carrying interim fares/meals), 144 services, 52 suppliers, 691 reviews (was 6,945), 54 users. The live `travel_app` database is unchanged at 6.49 MB.
+
 ## Phase 2 Data-Model Changes (logged per AGENTS.md)
 1. **User:** `role` gains `airline_manager` and `hotel_manager`; adds `supplierId`; `savedTravellers` becomes `{ firstName, lastName, ageCategory }` (≤ 20); adds `sandboxId`.
 2. **New collections:** `suppliers`, `services`, `offers` (replaces the unused `coupons` stub, which is dropped), `cancellationtemplates`, `configs`, `notifications`, `auditlogs`, `tickets`, `statements`, `adjustments`, `events`, `dailystats`, `sandboxes`.

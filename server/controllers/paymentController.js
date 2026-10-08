@@ -8,6 +8,8 @@ import { istMidnight } from '../utils/dates.js';
 import { HttpError } from '../utils/httpError.js';
 import { personName } from '../utils/names.js';
 import { dateString } from '../utils/query.js';
+import { notifySupplier, notifyUser } from '../services/notify.js';
+import { formatInr } from '../utils/format.js';
 import {
   generateReference,
   generateTransactionId,
@@ -74,6 +76,7 @@ async function buildFlightBooking(input) {
   return {
     type: 'flight',
     itemId: flight._id,
+    supplierId: flight.supplierId ?? null,
     selection: { fareType: input.fareType },
     travelDates: { start: flight.departureTime, end: flight.arrivalTime },
     travellers: input.travellers,
@@ -96,6 +99,7 @@ async function buildHotelBooking(input) {
   return {
     type: 'hotel',
     itemId: hotel._id,
+    supplierId: hotel.supplierId ?? null,
     selection: { roomTypeName: input.roomTypeName, rooms: input.rooms },
     travelDates: { start: istMidnight(input.checkIn), end: istMidnight(input.checkOut) },
     travellers: input.guests.map((g, i) => ({ ...g, specialRequests: i === 0 ? input.specialRequests : '' })),
@@ -122,6 +126,10 @@ async function awaitConcurrentBooking(userId, idempotencyKey, attempts = 5, dela
   return null;
 }
 
+// prd.md → Booking limits: at most this many upcoming hotel stays per account (hotel rooms are a
+// simple counter held until check-out, so this keeps one account from tying up a hotel).
+export const MAX_UPCOMING_STAYS = 5;
+
 export async function mockPayment(req, res) {
   const { idempotencyKey, method, simulateFailure, booking: input } = req.validated.body;
   const userId = req.user._id;
@@ -129,6 +137,20 @@ export async function mockPayment(req, res) {
   // A retried request (double-click, refresh, flaky network) returns the booking it already made.
   const existing = await Booking.findOne({ userId, idempotencyKey });
   if (existing) return res.status(200).json({ booking: existing, payment: { status: 'success' } });
+
+  if (req.user.role !== 'traveler') {
+    throw new HttpError(403, 'Staff accounts can’t make bookings. Sign in with a traveller account to book.', 'STAFF_CANNOT_BOOK');
+  }
+  if (input.type === 'hotel') {
+    const upcomingStays = await Booking.countDocuments({ userId, type: 'hotel', status: 'confirmed', 'travelDates.end': { $gt: new Date() } });
+    if (upcomingStays >= MAX_UPCOMING_STAYS) {
+      throw new HttpError(
+        409,
+        `You already have ${MAX_UPCOMING_STAYS} upcoming stays booked. You can book another once one of them is completed or cancelled.`,
+        'STAY_LIMIT',
+      );
+    }
+  }
 
   let draft;
   try {
@@ -180,6 +202,19 @@ export async function mockPayment(req, res) {
   });
   booking.paymentId = payment._id;
   await booking.save();
+
+  await notifySupplier(booking.supplierId, {
+    type: 'booking.new',
+    title: `New ${booking.type === 'flight' ? 'booking' : 'reservation'} ${booking.bookingReference}`,
+    body: `${booking.itemSummary.title} · ${booking.itemSummary.subtitle} · ${formatInr(booking.fareBreakdown.total)}`,
+    link: booking.type === 'flight' ? '/supplier/departures' : '/supplier/hotel',
+  });
+  await notifyUser(userId, {
+    type: 'booking.confirmed',
+    title: `Booking confirmed · ${booking.bookingReference}`,
+    body: `${booking.itemSummary.title} · ${formatInr(booking.fareBreakdown.total)} paid`,
+    link: `/bookings/${booking.bookingReference}/confirmation`,
+  });
 
   res.status(201).json({ booking, payment: { status: 'success', transactionId: payment.transactionId } });
 }

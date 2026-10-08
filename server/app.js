@@ -10,6 +10,9 @@ import bookingRoutes from './routes/bookingRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import cronRoutes from './routes/cronRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
+import supplierRoutes from './routes/supplierRoutes.js';
+import { requestContext } from './utils/context.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import { HttpError } from './utils/httpError.js';
 
@@ -32,6 +35,7 @@ export function createApp() {
     next();
   });
   app.use('/api', ensureDb); // reuses the cached Mongoose connection
+  app.use('/api', requestContext); // real-data scope for every query in the request (see models/plugins/sandboxScope.js)
 
   app.use('/api/auth', authRoutes);
   app.use('/api/flights', flightRoutes);
@@ -39,6 +43,8 @@ export function createApp() {
   app.use('/api/reviews', reviewRoutes);
   app.use('/api/bookings', bookingRoutes);
   app.use('/api/payments', paymentRoutes);
+  app.use('/api/notifications', notificationRoutes);
+  app.use('/api/supplier', supplierRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/cron', cronRoutes);
 

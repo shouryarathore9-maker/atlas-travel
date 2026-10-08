@@ -1,6 +1,14 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
+import { homeFor, isManager, ROLE_NOTICES } from '../lib/roles.js';
 import { Spinner } from './States.jsx';
+
+// role: 'admin' | 'manager' (airline or hotel) | 'traveler' | undefined (any signed-in user)
+function allowed(user, role) {
+  if (!role) return true;
+  if (role === 'manager') return isManager(user);
+  return user.role === role;
+}
 
 export default function ProtectedRoute({ children, role }) {
   const { user, status } = useAuth();
@@ -11,8 +19,9 @@ export default function ProtectedRoute({ children, role }) {
     const next = encodeURIComponent(location.pathname + location.search);
     return <Navigate to={`/login?next=${next}`} replace />;
   }
-  if (role && user.role !== role) {
-    return <Navigate to="/" replace state={{ notice: 'That area is for administrators only.' }} />;
+  if (!allowed(user, role)) {
+    const home = homeFor(user);
+    return <Navigate to={home === location.pathname ? '/' : home} replace state={{ notice: ROLE_NOTICES[role] }} />;
   }
   return children;
 }

@@ -1,6 +1,8 @@
 import mongoose from 'mongoose';
 import { z } from 'zod';
+import Flight from '../models/Flight.js';
 import Review from '../models/Review.js';
+import { reviewTarget } from './flightController.js';
 
 export const reviewQuerySchema = z.object({
   itemType: z.enum(['flight', 'hotel']),
@@ -11,7 +13,12 @@ export const reviewQuerySchema = z.object({
 
 export async function listReviews(req, res) {
   const { itemType, itemId, page, limit } = req.validated.query;
-  const filter = { itemType, itemId };
+  let filter = { itemType, itemId };
+  // The client asks for a departure's reviews; they're stored against its service.
+  if (itemType === 'flight') {
+    const flight = await Flight.findById(itemId, { serviceId: 1 }).lean();
+    if (flight) filter = reviewTarget(flight);
+  }
   const [reviews, total] = await Promise.all([
     Review.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
     Review.countDocuments(filter),

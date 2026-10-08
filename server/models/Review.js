@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 const reviewSchema = new mongoose.Schema(
   {
-    itemType: { type: String, enum: ['flight', 'hotel'], required: true },
+    itemType: { type: String, enum: ['service', 'flight', 'hotel'], required: true },
     itemId: { type: mongoose.Schema.Types.ObjectId, required: true },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     authorName: { type: String, default: 'Atlas traveller' }, // seed reviews have no real user

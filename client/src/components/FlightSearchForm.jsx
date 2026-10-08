@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from './Icon.jsx';
 import { CITIES } from '../lib/cities.js';
-import { addDays, isDateString, todayIst } from '../lib/dates.js';
+import { addDays, isDateString, lastBookableDate, todayIst } from '../lib/dates.js';
 
 export function validateFlightSearch({ origin, destination, date }) {
   if (!origin) return { field: 'origin', message: 'Choose where you are flying from' };
@@ -10,6 +10,7 @@ export function validateFlightSearch({ origin, destination, date }) {
   if (origin === destination) return { field: 'destination', message: 'Pick a destination different from your origin' };
   if (!isDateString(date)) return { field: 'date', message: 'Choose a travel date' };
   if (date < todayIst()) return { field: 'date', message: 'Travel date can’t be in the past' };
+  if (date > lastBookableDate()) return { field: 'date', message: 'Flights can be booked up to 60 days ahead' };
   return null;
 }
 
@@ -89,6 +90,7 @@ export default function FlightSearchForm({ initial = {}, compact = false }) {
               id="fs-date"
               type="date"
               min={todayIst()}
+              max={lastBookableDate()}
               value={values.date}
               onChange={set('date')}
               aria-invalid={invalid?.field === 'date'}

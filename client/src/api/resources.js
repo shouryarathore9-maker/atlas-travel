@@ -32,15 +32,35 @@ export const paymentsApi = {
   mock: (body) => api('/payments/mock', { method: 'POST', body }),
 };
 
-const adminResource = (name) => ({
-  list: (query, opts) => api(`/admin/${name}`, { query, ...opts }),
-  get: (id, opts) => api(`/admin/${name}/${id}`, opts),
-  create: (body) => api(`/admin/${name}`, { method: 'POST', body }),
-  update: (id, body) => api(`/admin/${name}/${id}`, { method: 'PUT', body }),
-  remove: (id) => api(`/admin/${name}/${id}`, { method: 'DELETE' }),
-});
+export const notificationsApi = {
+  list: (opts) => api('/notifications', opts),
+  unread: (opts) => api('/notifications/unread-count', opts),
+  read: (id) => api(`/notifications/${id}/read`, { method: 'POST' }),
+  readAll: () => api('/notifications/read-all', { method: 'POST' }),
+};
+
+export const supplierApi = {
+  overview: (opts) => api('/supplier/overview', opts),
+  catalogue: (opts) => api('/supplier/catalogue', opts),
+  services: {
+    list: (query, opts) => api('/supplier/services', { query, ...opts }),
+    get: (id, opts) => api(`/supplier/services/${id}`, opts),
+    create: (body) => api('/supplier/services', { method: 'POST', body }),
+    update: (id, body) => api(`/supplier/services/${id}`, { method: 'PUT', body }),
+    remove: (id) => api(`/supplier/services/${id}`, { method: 'DELETE' }),
+  },
+  departures: {
+    list: (query, opts) => api('/supplier/departures', { query, ...opts }),
+    stopSales: (id) => api(`/supplier/departures/${id}/stop-sales`, { method: 'POST' }),
+    resumeSales: (id) => api(`/supplier/departures/${id}/resume-sales`, { method: 'POST' }),
+  },
+  hotel: {
+    get: (opts) => api('/supplier/hotel', opts),
+    update: (body) => api('/supplier/hotel', { method: 'PUT', body }),
+  },
+};
 
 export const adminApi = {
-  flights: adminResource('flights'),
-  hotels: adminResource('hotels'),
+  audit: (query, opts) => api('/admin/audit', { query, ...opts }),
+  suppliers: (opts) => api('/admin/suppliers', opts),
 };

@@ -4,6 +4,7 @@ import Field from '../components/Field.jsx';
 import { Banner } from '../components/States.jsx';
 import { useAuth } from '../hooks/useAuth.jsx';
 import { useDocumentTitle } from '../hooks/useDocumentTitle.js';
+import { homeFor } from '../lib/roles.js';
 import { EMAIL_RE, NAME_MAX, validateSignup } from '../lib/validation.js';
 
 // Only allow same-site relative redirects after login.
@@ -46,7 +47,9 @@ export function Login() {
     ...(v.password ? {} : { password: 'Enter your password' }),
   }));
 
-  if (user) return <Navigate to={next} replace />;
+  // Staff land on their console unless they were sent here from a specific page.
+  const destination = (u) => (params.get('next') ? next : homeFor(u));
+  if (user) return <Navigate to={destination(user)} replace />;
 
   async function submit(e) {
     e.preventDefault();
@@ -55,8 +58,8 @@ export function Login() {
     form.setBusy(true);
     form.setServerError(null);
     try {
-      await login({ email: form.values.email.trim(), password: form.values.password });
-      navigate(next, { replace: true });
+      const signedIn = await login({ email: form.values.email.trim(), password: form.values.password });
+      navigate(destination(signedIn), { replace: true });
     } catch (err) {
       form.setServerError(err.message);
       form.setBusy(false);

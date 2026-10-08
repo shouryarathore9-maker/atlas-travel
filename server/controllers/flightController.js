@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import Flight from '../models/Flight.js';
 import Review from '../models/Review.js';
-import { istDayRange, IST_OFFSET_MS } from '../utils/dates.js';
+import { istDayRange, IST_OFFSET_MS, lastBookableDate } from '../utils/dates.js';
 import { HttpError } from '../utils/httpError.js';
 import { csv, dateString, optionalNumber, paginate, pagination } from '../utils/query.js';
 
@@ -44,11 +44,18 @@ const sorters = {
 export async function searchFlights(req, res) {
   const q = req.validated.query;
   const [start, end] = istDayRange(q.date);
+  // Beyond the booking horizon there are no departures yet; say so instead of "no flights".
+  if (q.date > lastBookableDate()) {
+    return res.json({ results: [], total: 0, page: 1, pages: 1, unfilteredTotal: 0, tooFar: true, facets: { airlines: [], stops: [], minPrice: 0, maxPrice: 0 } });
+  }
 
+  // Cancelled departures and those with sales stopped by the airline aren't on sale.
   const candidates = await Flight.find({
     'origin.code': q.origin,
     'destination.code': q.destination,
     departureTime: { $gte: start, $lt: end },
+    status: 'scheduled',
+    salesStopped: { $ne: true },
   })
     .select('-seatMap.unavailableSeats -mealOptions')
     .lean();
@@ -103,9 +110,14 @@ export async function searchFlights(req, res) {
   res.json({ ...paginate(filtered, q.page, q.limit), facets, unfilteredTotal: available.length });
 }
 
+// Reviews belong to the service (flight number), so every departure of it shows the same ones.
+export function reviewTarget(flight) {
+  return flight.serviceId ? { itemType: 'service', itemId: flight.serviceId } : { itemType: 'flight', itemId: flight._id };
+}
+
 export async function getFlight(req, res) {
   const flight = await Flight.findById(req.params.id).lean();
   if (!flight) throw new HttpError(404, 'We could not find that flight.', 'NOT_FOUND');
-  const reviews = await Review.find({ itemType: 'flight', itemId: flight._id }).sort({ createdAt: -1 }).limit(5).lean();
+  const reviews = await Review.find(reviewTarget(flight)).sort({ createdAt: -1 }).limit(5).lean();
   res.json({ flight, reviews });
 }

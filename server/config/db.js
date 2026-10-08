@@ -7,16 +7,24 @@ import { attachDatabasePool } from '@vercel/functions';
 // *promise* in module scope: concurrent cold-start requests all await the same connect.
 let connecting = null;
 
+// MONGODB_DB (optional) picks a database other than the one named in the URI — e.g. a
+// development database on the same cluster, so local work never touches live data.
+const options = () => ({
+  serverSelectionTimeoutMS: 15000,
+  maxIdleTimeMS: 10000,
+  ...(process.env.MONGODB_DB && { dbName: process.env.MONGODB_DB }),
+});
+
 async function openConnection(uri) {
   try {
-    await mongoose.connect(uri, { serverSelectionTimeoutMS: 15000, maxIdleTimeMS: 10000 });
+    await mongoose.connect(uri, options());
   } catch (err) {
     // Some home routers intermittently refuse the SRV lookups that mongodb+srv:// URIs need.
     // Retry once with public DNS resolvers (harmless on Vercel, where this doesn't happen).
     if (!/querySrv|ENOTFOUND|ECONNREFUSED/.test(err.message)) throw err;
     console.warn('MongoDB SRV lookup failed, retrying with public DNS resolvers…');
     dns.setServers(['1.1.1.1', '8.8.8.8']);
-    await mongoose.connect(uri, { serverSelectionTimeoutMS: 15000, maxIdleTimeMS: 10000 });
+    await mongoose.connect(uri, options());
   }
   // Lets Vercel close idle pool connections before suspending the instance (no-op locally).
   attachDatabasePool(mongoose.connection.getClient());

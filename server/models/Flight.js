@@ -1,4 +1,6 @@
 import mongoose from 'mongoose';
+import { AIRCRAFT_KEYS } from '../services/aircraft.js';
+import { sandboxScope } from './plugins/sandboxScope.js';
 
 const airportSchema = new mongoose.Schema(
   { code: { type: String, required: true, uppercase: true }, city: { type: String, required: true }, airport: String },
@@ -21,7 +23,15 @@ const fareOptionSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// One dated departure of a Service (see Service.js). Flights without a serviceId are one-offs
+// (only tests create those).
 const flightSchema = new mongoose.Schema({
+  supplierId: { type: mongoose.Schema.Types.ObjectId, ref: 'Supplier', default: null, index: true },
+  serviceId: { type: mongoose.Schema.Types.ObjectId, ref: 'Service', default: null },
+  date: { type: String, default: null }, // YYYY-MM-DD departure date (IST)
+  aircraftConfig: { type: String, enum: [...AIRCRAFT_KEYS, null], default: null },
+  status: { type: String, enum: ['scheduled', 'cancelled'], default: 'scheduled' },
+  salesStopped: { type: Boolean, default: false },
   airline: { type: String, required: true },
   flightNumber: { type: String, required: true },
   aircraftType: { type: String, default: 'Airbus A320neo' },
@@ -46,6 +56,11 @@ const flightSchema = new mongoose.Schema({
   rating: { average: { type: Number, default: 0 }, count: { type: Number, default: 0 } },
 });
 
+flightSchema.plugin(sandboxScope);
 flightSchema.index({ 'origin.code': 1, 'destination.code': 1, departureTime: 1 });
+flightSchema.index(
+  { sandboxId: 1, serviceId: 1, date: 1 },
+  { unique: true, partialFilterExpression: { serviceId: { $type: 'objectId' } } },
+);
 
 export default mongoose.model('Flight', flightSchema);

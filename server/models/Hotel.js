@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { sandboxScope } from './plugins/sandboxScope.js';
 
 const roomTypeSchema = new mongoose.Schema(
   {
@@ -14,12 +15,16 @@ const roomTypeSchema = new mongoose.Schema(
       freeUntilDaysBeforeCheckIn: { type: Number, default: 1 },
       feeAfterCutoff: { type: Number, default: 0 },
     },
-    roomsAvailable: { type: Number, required: true, min: 0 },
+    roomsAvailable: { type: Number, required: true, min: 0 }, // counter: −booking, +cancellation, +after check-out
+    roomsTotal: { type: Number, default: null, min: 0 }, // rooms of this type in the hotel (occupancy)
+    salesStopped: { type: Boolean, default: false },
   },
   { _id: false },
 );
 
 const hotelSchema = new mongoose.Schema({
+  supplierId: { type: mongoose.Schema.Types.ObjectId, ref: 'Supplier', default: null, index: true },
+  salesStopped: { type: Boolean, default: false },
   name: { type: String, required: true },
   city: { type: String, required: true, index: true },
   address: String,
@@ -30,5 +35,7 @@ const hotelSchema = new mongoose.Schema({
   roomTypes: { type: [roomTypeSchema], validate: (v) => v.length > 0 },
   rating: { average: { type: Number, default: 0 }, count: { type: Number, default: 0 } },
 });
+
+hotelSchema.plugin(sandboxScope);
 
 export default mongoose.model('Hotel', hotelSchema);

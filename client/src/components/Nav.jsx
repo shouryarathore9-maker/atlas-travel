@@ -1,6 +1,8 @@
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import Icon from './Icon.jsx';
+import NotificationBell from './NotificationBell.jsx';
 import { useAuth } from '../hooks/useAuth.jsx';
+import { isManager } from '../lib/roles.js';
 
 export default function Nav() {
   const { user, logout } = useAuth();
@@ -38,19 +40,28 @@ export default function Nav() {
           </nav>
         </div>
         <nav className="nav-links" aria-label="Account">
-          {user && (
+          {user && <NotificationBell />}
+          {user?.role === 'traveler' && (
             <NavLink to="/bookings" className="nav-link">
               My trips
             </NavLink>
           )}
+          {isManager(user) && (
+            <NavLink to="/supplier" className="nav-link">
+              <span className="hide-phone">Supplier </span>console
+            </NavLink>
+          )}
           {user?.role === 'admin' && (
             <NavLink to="/admin" className="nav-link">
-              Admin
+              <span className="hide-phone">Admin </span>console
             </NavLink>
           )}
           {user ? (
             <>
-              <span className="nav-user">Hi, {user.name.split(' ')[0]}</span>
+              {/* Travellers are greeted by first name; staff accounts are named after their airline or hotel. */}
+              <span className="nav-user" title={user.name}>
+                {user.role === 'traveler' ? `Hi, ${user.name.split(' ')[0]}` : user.name}
+              </span>
               <button type="button" className="btn btn-secondary btn-sm" onClick={handleLogout}>
                 Sign out
               </button>

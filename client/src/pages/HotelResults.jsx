@@ -167,7 +167,19 @@ export default function HotelResults() {
           {data && (
             <div className={loading ? 'results-list is-loading' : 'results-list'}>
               {data.results.length === 0 &&
-                (data.pastDates ? (
+                (data.tooFar ? (
+                  <EmptyState
+                    title="Stays can be booked up to 60 days ahead"
+                    icon="calendar"
+                    action={
+                      <button type="button" className="btn btn-secondary" onClick={() => setEditing(true)}>
+                        Pick earlier dates
+                      </button>
+                    }
+                  >
+                    Choose a check-in date within the next 60 days to see available stays.
+                  </EmptyState>
+                ) : data.pastDates ? (
                   <EmptyState
                     title="Those dates have already passed"
                     icon="calendar"

@@ -1,56 +1,33 @@
 import { useEffect, useState } from 'react';
-import { Link, NavLink, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useOutletContext, useSearchParams } from 'react-router-dom';
 import Modal from '../../components/Modal.jsx';
 import { Banner, EmptyState, ErrorState, SkeletonList } from '../../components/States.jsx';
-import { adminApi } from '../../api/resources.js';
+import { supplierApi } from '../../api/resources.js';
 import { useAsync } from '../../hooks/useAsync.js';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle.js';
-import { formatDateTime, formatPrice } from '../../lib/format.js';
+import { daysLabel, minuteToTime } from '../../lib/consoleForm.js';
+import { formatDateString, formatDuration } from '../../lib/format.js';
 
-const CONFIG = {
-  flights: {
-    title: 'Flights',
-    singular: 'flight',
-    columns: ['Flight', 'Route', 'Departs', 'From price'],
-    row: (f) => [
-      `${f.airline} ${f.flightNumber}`,
-      `${f.origin.code} → ${f.destination.code}`,
-      formatDateTime(f.departureTime),
-      formatPrice(Math.min(...f.fareOptions.map((o) => o.price))),
-    ],
-    label: (f) => `${f.airline} ${f.flightNumber}`,
-  },
-  hotels: {
-    title: 'Hotels',
-    singular: 'hotel',
-    columns: ['Hotel', 'City', 'Stars', 'From price'],
-    row: (h) => [h.name, h.city, `${h.starRating}★`, formatPrice(Math.min(...h.roomTypes.map((r) => r.price)))],
-    label: (h) => h.name,
-  },
-};
-
-export default function AdminList({ resource }) {
-  const config = CONFIG[resource];
-  useDocumentTitle(`Admin · ${config.title}`);
+export default function Services() {
+  const { supplier } = useOutletContext();
+  useDocumentTitle(`${supplier.name} · Services`);
+  const location = useLocation();
   const [params, setParams] = useSearchParams();
   const q = params.get('q') || '';
   const page = Number(params.get('page')) || 1;
   const [search, setSearch] = useState(q);
   const [deleting, setDeleting] = useState(null);
   const [deleteState, setDeleteState] = useState({ busy: false, error: null });
-  const [notice, setNotice] = useState(null);
+  const [notice, setNotice] = useState(location.state?.saved || null);
 
-  useEffect(() => {
-    setSearch(q);
-  }, [q]);
-
-  const { data, error, reload } = useAsync((signal) => adminApi[resource].list({ q, page }, { signal }), [resource, q, page]);
+  useEffect(() => setSearch(q), [q]);
+  const { data, error, reload } = useAsync((signal) => supplierApi.services.list({ q, page }, { signal }), [q, page]);
 
   async function confirmDelete() {
     setDeleteState({ busy: true, error: null });
     try {
-      await adminApi[resource].remove(deleting._id);
-      setNotice(`${config.label(deleting)} was deleted.`);
+      await supplierApi.services.remove(deleting._id);
+      setNotice(`${deleting.flightNumber} was deleted.`);
       setDeleting(null);
       setDeleteState({ busy: false, error: null });
       reload();
@@ -60,29 +37,19 @@ export default function AdminList({ resource }) {
   }
 
   return (
-    <main id="main" className="container page">
-      <p className="eyebrow">Admin</p>
+    <>
       <div className="spread">
-        <h1>Inventory</h1>
-        <Link to={`/admin/${resource}/new`} className="btn btn-primary">
-          Add {config.singular}
+        <h1 className="console-h1">Services</h1>
+        <Link to="/supplier/services/new" className="btn btn-primary">
+          Add service
         </Link>
       </div>
-      <nav className="tabs admin-tabs" aria-label="Inventory type">
-        <NavLink to="/admin/flights" className={({ isActive }) => `tab ${isActive ? 'is-active' : ''}`} aria-current={resource === 'flights' ? 'page' : undefined}>
-          Flights
-        </NavLink>
-        <NavLink to="/admin/hotels" className={({ isActive }) => `tab ${isActive ? 'is-active' : ''}`} aria-current={resource === 'hotels' ? 'page' : undefined}>
-          Hotels
-        </NavLink>
-      </nav>
-
+      <p className="muted">Your recurring flights. Departures for the next 60 days are created from these automatically.</p>
       {notice && (
         <Banner tone="success">
           <p>{notice}</p>
         </Banner>
       )}
-
       <form
         className="row admin-search"
         role="search"
@@ -91,58 +58,62 @@ export default function AdminList({ resource }) {
           setParams(search ? { q: search } : {});
         }}
       >
-        <label htmlFor="admin-q" className="sr-only">
-          Search {config.title.toLowerCase()}
+        <label htmlFor="svc-q" className="sr-only">
+          Search services
         </label>
-        <input
-          id="admin-q"
-          className="input"
-          placeholder={resource === 'flights' ? 'Flight number, airline or city' : 'Hotel name or city'}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <input id="svc-q" className="input" placeholder="Flight number or city" value={search} onChange={(e) => setSearch(e.target.value)} />
         <button type="submit" className="btn btn-secondary">
           Search
         </button>
       </form>
 
       {error && <ErrorState error={error} onRetry={reload} />}
-      {!error && !data && <SkeletonList count={5} height={56} />}
-      {data && data.items.length === 0 && <EmptyState title={`No ${config.title.toLowerCase()} found`}>Try a different search.</EmptyState>}
+      {!error && !data && <SkeletonList count={5} height={48} />}
+      {data && data.items.length === 0 && (
+        <EmptyState title={q ? 'No services match that search' : 'No services yet'}>{q ? 'Try a different search.' : 'Add your first recurring flight.'}</EmptyState>
+      )}
       {data && data.items.length > 0 && (
         <>
-          <p className="small muted">{data.total} total</p>
+          <p className="small muted">{data.total} services</p>
           <div className="table-wrap">
             <table className="admin-table">
               <thead>
                 <tr>
-                  {config.columns.map((c) => (
-                    <th key={c} scope="col">
-                      {c}
-                    </th>
-                  ))}
+                  <th scope="col">Flight</th>
+                  <th scope="col">Route</th>
+                  <th scope="col">Departs</th>
+                  <th scope="col">Duration</th>
+                  <th scope="col">Days</th>
+                  <th scope="col">Aircraft</th>
+                  <th scope="col">Runs</th>
                   <th scope="col">
                     <span className="sr-only">Actions</span>
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {data.items.map((item) => (
-                  <tr key={item._id}>
-                    {config.row(item).map((cell, i) => (
-                      <td key={i}>{cell}</td>
-                    ))}
+                {data.items.map((s) => (
+                  <tr key={s._id}>
+                    <td>{s.flightNumber}</td>
+                    <td>
+                      {s.origin.code} → {s.destination.code}
+                    </td>
+                    <td>{minuteToTime(s.departureMinute)}</td>
+                    <td>{formatDuration(s.durationMinutes)}</td>
+                    <td>{daysLabel(s.daysOfWeek)}</td>
+                    <td>{s.aircraftName}</td>
+                    <td>{s.endDate ? `until ${formatDateString(s.endDate)}` : `from ${formatDateString(s.startDate)}`}</td>
                     <td className="table-actions">
-                      <Link to={`/admin/${resource}/${item._id}`} className="btn-text small" aria-label={`Edit ${config.label(item)}`}>
+                      <Link to={`/supplier/services/${s._id}`} className="btn-text small" aria-label={`Edit ${s.flightNumber}`}>
                         Edit
                       </Link>
                       <button
                         type="button"
                         className="btn-text small"
-                        aria-label={`Delete ${config.label(item)}`}
+                        aria-label={`Delete ${s.flightNumber}`}
                         onClick={() => {
                           setDeleteState({ busy: false, error: null });
-                          setDeleting(item);
+                          setDeleting(s);
                         }}
                       >
                         Delete
@@ -171,12 +142,12 @@ export default function AdminList({ resource }) {
 
       {deleting && (
         <Modal
-          title={`Delete ${config.singular}?`}
+          title={`Delete ${deleting.flightNumber}?`}
           onClose={() => setDeleting(null)}
           footer={
             <div className="row">
               <button type="button" className="btn btn-danger" onClick={confirmDelete} disabled={deleteState.busy}>
-                {deleteState.busy ? 'Deleting…' : 'Delete'}
+                {deleteState.busy ? 'Deleting…' : 'Delete service'}
               </button>
               <button type="button" className="btn btn-secondary" onClick={() => setDeleting(null)}>
                 Cancel
@@ -185,7 +156,8 @@ export default function AdminList({ resource }) {
           }
         >
           <p>
-            <strong>{config.label(deleting)}</strong> and its reviews will be removed from search immediately. This can’t be undone.
+            All of its departures and reviews are removed and it disappears from search. A service that has bookings can’t be deleted — set an end date
+            instead.
           </p>
           {deleteState.error && (
             <p className="field-error" role="alert">
@@ -194,6 +166,6 @@ export default function AdminList({ resource }) {
           )}
         </Modal>
       )}
-    </main>
+    </>
   );
 }
