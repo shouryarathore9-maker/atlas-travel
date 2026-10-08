@@ -7,6 +7,15 @@ export const authApi = {
   logout: () => api('/auth/logout', { method: 'POST' }),
 };
 
+// Visitor sandboxes: always the real /api/sandbox lifecycle routes.
+export const sandboxApi = {
+  options: (opts) => api('/sandbox/options', { raw: true, ...opts }),
+  session: () => api('/sandbox/session', { raw: true }),
+  start: (body) => api('/sandbox', { method: 'POST', body, raw: true }),
+  end: () => api('/sandbox', { method: 'DELETE', raw: true }),
+  switchView: () => api('/sandbox/switch', { method: 'POST', raw: true }),
+};
+
 export const flightsApi = {
   search: (query, opts) => api('/flights', { query, ...opts }),
   get: (id, query, opts) => api(`/flights/${id}`, { query, ...opts }),

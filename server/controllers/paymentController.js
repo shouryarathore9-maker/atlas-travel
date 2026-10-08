@@ -18,6 +18,7 @@ import {
 } from '../services/bookingService.js';
 import { notifySupplier, notifyUser } from '../services/notify.js';
 import { track } from '../services/analytics.js';
+import { useSandboxQuota } from '../services/sandbox.js';
 import { claimRedemption } from '../services/offers.js';
 import { quoteBooking, quoteView } from '../services/quote.js';
 
@@ -174,6 +175,7 @@ export async function mockPayment(req, res) {
     });
   }
 
+  await useSandboxQuota('bookings');
   try {
     await reserveInventory(draft);
   } catch (err) {

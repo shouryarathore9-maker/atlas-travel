@@ -10,6 +10,7 @@ import Ticket from '../models/Ticket.js';
 import User from '../models/User.js';
 import { audit } from '../services/audit.js';
 import { notifySupplier, notifyUsers } from '../services/notify.js';
+import { useSandboxQuota } from '../services/sandbox.js';
 import { periodLabel } from '../services/settlement.js';
 import { HttpError } from '../utils/httpError.js';
 import { pagination } from '../utils/query.js';
@@ -57,6 +58,7 @@ export async function queryLine(req, res) {
   if (await Ticket.exists({ type: 'statement_query', statementId: statement._id, bookingReference: ref, status: { $ne: 'resolved' } })) {
     throw new HttpError(409, 'There’s already an open query on this line.', 'QUERY_EXISTS');
   }
+  await useSandboxQuota('docs');
   const ticket = await Ticket.create({
     type: 'statement_query',
     bookingId: line.bookingId,

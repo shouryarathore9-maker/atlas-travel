@@ -7,6 +7,8 @@ import { acquireLock, releaseLock } from '../models/JobLock.js';
 import { sweepUnusedPhotos } from '../controllers/photoController.js';
 import { trimNotifications } from './notify.js';
 import { closeStatements } from './settlement.js';
+import { sweepSandboxes } from './sandbox.js';
+import { runWithContext } from '../utils/context.js';
 import { rollUpEvents } from './analytics.js';
 import { expireOffers } from './offers.js';
 import { closeRescheduleWindows, resumeCancellations } from './supplierCancellation.js';
@@ -50,6 +52,8 @@ export const STEPS = [
   ['notifications', () => trimNotifications()],
   ['funnel', ({ now }) => rollUpEvents({ now })],
   ['unusedPhotos', ({ now }) => sweepUnusedPhotos({ now })],
+  // The only step that works across sandboxes: it deletes ended ones (see below).
+  ['sandboxes', ({ now }) => sweepSandboxes({ now })],
 ];
 
 export async function runDailyJob({ now = Date.now(), budgetMs = BUDGET_MS } = {}) {
@@ -64,7 +68,9 @@ export async function runDailyJob({ now = Date.now(), budgetMs = BUDGET_MS } = {
         results[name] = 'deferred to the next run';
         continue;
       }
-      results[name] = await step({ now });
+      // Every step except the sweep sees real data only — a sandbox's copied services must never
+      // grow real departures, close real statements or return real rooms.
+      results[name] = name === 'sandboxes' ? await step({ now }) : await runWithContext({ sandboxId: null }, () => step({ now }));
     }
     return { skipped: false, results };
   } finally {

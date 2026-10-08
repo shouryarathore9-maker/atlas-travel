@@ -1,3 +1,4 @@
+import { inSandbox } from '../services/sandbox.js';
 import mongoose from 'mongoose';
 import Hotel from '../models/Hotel.js';
 import Photo, { MAX_PHOTO_BYTES, MAX_UPLOADS_PER_HOTEL, PHOTO_TYPES, photoUrl } from '../models/Photo.js';
@@ -23,6 +24,7 @@ export async function listUploads(req, res) {
 }
 
 export async function uploadPhoto(req, res) {
+  if (inSandbox()) throw new HttpError(403, 'Photo uploads aren’t available in the demo — pick from the Atlas gallery instead.', 'NOT_IN_DEMO');
   const declared = (req.get('content-type') || '').split(';')[0].trim();
   if (!PHOTO_TYPES.includes(declared) || !Buffer.isBuffer(req.body)) {
     throw new HttpError(415, 'Upload a JPEG, PNG or WebP image.', 'UNSUPPORTED_TYPE');

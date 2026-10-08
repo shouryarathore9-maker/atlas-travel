@@ -1,6 +1,8 @@
 // Turns recurring services into dated departures inside the booking window (60 days by default).
 // Idempotent: a departure is unique per (service, date), existing departures are never touched,
 // and a missed day is filled by the next run.
+import { currentContext } from '../utils/context.js';
+import { SANDBOX_DAYS } from '../models/Sandbox.js';
 import Booking from '../models/Booking.js';
 import Flight from '../models/Flight.js';
 import Service from '../models/Service.js';
@@ -29,7 +31,8 @@ async function insertIgnoringDuplicates(docs) {
  *                   catch-up after a long gap never bursts past the database's operations limit.
  * @param serviceIds limit the run to these services (after a service is added or edited).
  */
-export async function materialiseDepartures({ days = WINDOW_DAYS, now = Date.now(), maxNewDays = Infinity, serviceIds } = {}) {
+export async function materialiseDepartures({ days: requestedDays = WINDOW_DAYS, now = Date.now(), maxNewDays = Infinity, serviceIds } = {}) {
+  const days = currentContext()?.sandboxId ? Math.min(requestedDays, SANDBOX_DAYS) : requestedDays;
   const today = todayIstString(now);
   const last = addDays(today, days - 1);
   const services = await Service.find({ status: 'active', ...(serviceIds && { _id: { $in: serviceIds } }) }).lean();

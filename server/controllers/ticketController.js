@@ -8,6 +8,7 @@ import Supplier from '../models/Supplier.js';
 import Ticket, { TICKET_MESSAGE_LIMIT } from '../models/Ticket.js';
 import User from '../models/User.js';
 import { audit } from '../services/audit.js';
+import { useSandboxQuota } from '../services/sandbox.js';
 import { notifySupplier, notifyUser, notifyUsers } from '../services/notify.js';
 import { HttpError } from '../utils/httpError.js';
 import { pagination } from '../utils/query.js';
@@ -44,6 +45,7 @@ export async function createTicket(req, res) {
   if (await Ticket.exists({ bookingId: booking._id, type: 'booking_problem', status: { $nin: ['closed', 'resolved'] } })) {
     throw new HttpError(409, 'There’s already an open ticket for this booking — reply there instead.', 'TICKET_EXISTS');
   }
+  await useSandboxQuota('docs');
   const ticket = await Ticket.create({
     type: 'booking_problem',
     bookingId: booking._id,

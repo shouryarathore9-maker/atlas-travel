@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
+import { useAuth } from '../../hooks/useAuth.jsx';
 import Field from '../../components/Field.jsx';
 import { Banner, ErrorState, Spinner } from '../../components/States.jsx';
 import { supplierApi } from '../../api/resources.js';
@@ -61,6 +62,7 @@ const toggle = (list, item) => (list.includes(item) ? list.filter((x) => x !== i
 
 export default function HotelProperty() {
   const { supplier } = useOutletContext();
+  const { sandbox } = useAuth();
   useDocumentTitle(`${supplier.name} · Property & rooms`);
   const [values, setValues] = useState(null);
   const [catalogue, setCatalogue] = useState(null);
@@ -168,7 +170,7 @@ export default function HotelProperty() {
           <p className="small muted">
             Pick up to {catalogue.uploads?.maxHotelPhotos || 6}, in order: the first is the main photo and the first three appear on your hotel page.
           </p>
-          <PhotoPicker value={values.photos} onChange={(photos) => set('photos', photos)} gallery={catalogue.gallery} limits={catalogue.uploads} error={errors.photos} />
+          <PhotoPicker value={values.photos} onChange={(photos) => set('photos', photos)} gallery={catalogue.gallery} limits={catalogue.uploads} allowUploads={!sandbox} error={errors.photos} />
         </section>
 
         <section className="card">

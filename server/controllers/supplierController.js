@@ -12,6 +12,7 @@ import Service from '../models/Service.js';
 import Supplier from '../models/Supplier.js';
 import { AIRCRAFT, AIRCRAFT_KEYS } from '../services/aircraft.js';
 import { audit, snapshot } from '../services/audit.js';
+import { useSandboxQuota } from '../services/sandbox.js';
 import { materialiseDepartures, rebuildServiceDepartures, WINDOW_DAYS } from '../services/schedule.js';
 import { CITIES, HOTEL_AMENITIES, HOTEL_PHOTO_COUNT, ROOM_AMENITIES } from '../seed/data.js';
 import { distanceKm } from '../seed/generate.js';
@@ -167,6 +168,7 @@ export async function createService(req, res) {
   if (await Service.exists({ supplierId: req.supplierId, flightNumber: doc.flightNumber })) {
     throw new HttpError(409, `${doc.flightNumber} already exists. Edit it instead.`, 'DUPLICATE');
   }
+  await useSandboxQuota('listings');
   const service = await Service.create({ ...doc, supplierId: req.supplierId, airline: req.supplier.name });
   const result = await materialiseDepartures({ serviceIds: [service._id] });
   await audit(req, { action: 'service.create', target: { type: 'service', id: service._id, label: serviceLabel(service) }, after: snapshot(service, SERVICE_AUDIT_FIELDS) });

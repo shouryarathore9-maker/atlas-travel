@@ -38,6 +38,11 @@ function clearSession(res) {
 }
 
 export async function requireAuth(req, res, next) {
+  // Under /api/sandbox the sandbox session has already identified the (sandbox-only) account.
+  if (req.sandboxUser) {
+    req.user = req.sandboxUser;
+    return next();
+  }
   const token = req.cookies?.[AUTH_COOKIE];
   if (!token) throw new HttpError(401, 'Please sign in to continue.', 'UNAUTHENTICATED');
 
@@ -61,6 +66,10 @@ export async function requireAuth(req, res, next) {
 
 // Like requireAuth, but an anonymous or expired session just leaves req.user unset.
 export async function optionalAuth(req, res, next) {
+  if (req.sandboxUser) {
+    req.user = req.sandboxUser;
+    return next();
+  }
   const token = req.cookies?.[AUTH_COOKIE];
   if (token) {
     try {

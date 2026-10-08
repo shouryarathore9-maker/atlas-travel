@@ -8,6 +8,7 @@ import Offer from '../models/Offer.js';
 import Supplier from '../models/Supplier.js';
 import { audit, snapshot } from '../services/audit.js';
 import { describeDiscount, FIRST_BOOKINGS_LIMIT } from '../services/offers.js';
+import { useSandboxQuota } from '../services/sandbox.js';
 import { hiddenSupplierFilter, isSuspended } from '../services/suppliers.js';
 import { todayIstString } from '../utils/dates.js';
 import { HttpError } from '../utils/httpError.js';
@@ -128,6 +129,7 @@ async function create(req, res, { funder }) {
   }
   if (input.code && (await Offer.exists({ code: input.code }))) throw new HttpError(409, 'That code is already in use. Choose another.', 'DUPLICATE');
   const today = todayIstString();
+  await useSandboxQuota('listings');
   const offer = await Offer.create({
     ...input,
     code: input.auto ? null : input.code,
