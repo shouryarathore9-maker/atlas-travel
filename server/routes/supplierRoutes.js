@@ -33,6 +33,7 @@ import {
   rescheduleDepartureHandler,
   rescheduleSchema,
 } from '../controllers/supplierOpsController.js';
+import { querySchema, queryLine, supplierStatement, supplierStatements } from '../controllers/statementController.js';
 import { messageSchema, supplierGet, supplierList, supplierReply } from '../controllers/ticketController.js';
 import { MAX_PHOTO_BYTES, PHOTO_TYPES } from '../models/Photo.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -84,6 +85,11 @@ router.post('/special-requests/:bookingId/reply', validate(replySchema), replySp
 router.get('/tickets', supplierList);
 router.get('/tickets/:id', supplierGet);
 router.post('/tickets/:id/messages', validate(messageSchema), supplierReply);
+
+// Settlement statements
+router.get('/statements', supplierStatements);
+router.get('/statements/:id', supplierStatement);
+router.post('/statements/:id/lines/:ref/query', validate(querySchema), queryLine);
 
 // Own offers
 router.get('/offers', validate(offerListSchema, 'query'), supplierOffers.list);

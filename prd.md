@@ -225,7 +225,7 @@ Every page shows only the manager's own airline or hotel. Every change applies t
 - **Special requests:** open requests with **Accept** or **Can't accommodate** plus a comment (up to 300 characters).
 - **Escalated tickets:** tickets admin escalated to this supplier, with a reply box.
 - **Offers:** own offers (create, edit, pause, resume) with redemptions and discount cost.
-- **Statements:** monthly settlement statements (see Settlement), with **Query this line**.
+- **Statements:** monthly settlement statements (see Settlement), with **Query this line**. The query appears in Requests & tickets, where the manager can add details until Atlas resolves it; resolved adjustments waiting for the next statement are listed under the statement.
 
 ### Admin console (admin accounts only)
 - **Analytics** — the dashboard in Workflow 12.
@@ -603,6 +603,7 @@ These were flagged as open questions; each now has a default decision so nothing
 26. **Bell jingle and chime (owner request):** see Global → New notification.
 27. **Supplier suspension (owner request):** see Admin console → Suppliers. Suspension is all-or-nothing per supplier (no partial suspension of one route or room type — managers already have Stop sales for that). The manager isn't sent a notification (they can't sign in to read it); the reason lives in the audit log.
 28. **Pricing limits (owner request), chosen defaults:** multiplier ceiling ×2.0 (the default rate cards peak at ×1.5); flight fare ₹1,000–₹75,000 (the dearest seeded business fare at its guard-rail ceiling is about ₹63,000; the cheapest seeded economy fare about ₹1,700); hotel night ₹500–₹1,50,000. The structural business-cabin ratio (×1.5–×6) and airline factor (×0.5–×2) keep their own fixed bounds; at save time Atlas also checks that the base fare of every route (economy) and of the longest route (business) falls inside the fare bounds, which catches typos such as ₹340 per km.
+29. **Settlement details:** infant fees pass through to the airline like taxes (no commission); a retained cancellation fee is commissioned in full; a traveller cancellation refunded in full doesn't appear on a statement; trips missed in an earlier month appear on the next statement rather than being lost.
 
 **Phase 2 assumptions from the spec, confirmed as written:** funding and commission rules (Settlement); no convenience fee exists — confirmed in code (flight taxes are 12% of the base fare; hotel taxes are seeded per room per night; neither includes an Atlas charge), so the label becomes "Taxes"; tax recomputed on the discounted base; redemption restored only on supplier cancellation; a typed code replaces an automatic offer; validity dates are booking dates; first-3-bookings excludes supplier-cancelled bookings; no offer badges in results; the admin kill switch is not moderation; build order platform offers first, then supplier offers and the funding split; Saturday ×1.05; commission 10%; special requests visible to admin read-only and supplier replies audit-logged; take rate on completed bookings; sandbox hotels from the best-hotels set; sandbox admin actions affect only the sandbox.
 

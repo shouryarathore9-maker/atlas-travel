@@ -12,6 +12,7 @@ const LINKS = {
     { to: '/supplier/policies', label: 'Policies', icon: 'suitcase' },
     { to: '/supplier/requests', label: 'Requests & tickets', icon: 'alert' },
     { to: '/supplier/offers', label: 'Offers', icon: 'star' },
+    { to: '/supplier/statements', label: 'Statements', icon: 'receipt' },
   ],
   hotel: [
     { to: '/supplier', end: true, label: 'Overview', icon: 'chart' },
@@ -20,6 +21,7 @@ const LINKS = {
     { to: '/supplier/pricing', label: 'Pricing', icon: 'receipt' },
     { to: '/supplier/requests', label: 'Requests & tickets', icon: 'alert' },
     { to: '/supplier/offers', label: 'Offers', icon: 'star' },
+    { to: '/supplier/statements', label: 'Statements', icon: 'receipt' },
   ],
 };
 

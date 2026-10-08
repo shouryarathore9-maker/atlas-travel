@@ -6,6 +6,7 @@ import Hotel from '../models/Hotel.js';
 import { acquireLock, releaseLock } from '../models/JobLock.js';
 import { sweepUnusedPhotos } from '../controllers/photoController.js';
 import { trimNotifications } from './notify.js';
+import { closeStatements } from './settlement.js';
 import { expireOffers } from './offers.js';
 import { closeRescheduleWindows, resumeCancellations } from './supplierCancellation.js';
 import { materialiseDepartures, pruneDepartures, WINDOW_DAYS } from './schedule.js';
@@ -43,6 +44,7 @@ export const STEPS = [
   ['hotelRooms', ({ now }) => returnHotelRooms({ now })],
   ['offers', ({ now }) => expireOffers({ now })],
   ['cancellations', () => resumeCancellations()],
+  ['statements', ({ now }) => closeStatements({ now })],
   ['rescheduleWindows', ({ now }) => closeRescheduleWindows({ now })],
   ['notifications', () => trimNotifications()],
   ['unusedPhotos', ({ now }) => sweepUnusedPhotos({ now })],

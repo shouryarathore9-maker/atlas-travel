@@ -2697,3 +2697,19 @@
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
   gap: 0 var(--space-4);
 }
+
+/* Settlement statements */
+.admin-table .num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.admin-table td.text-error {
+  color: var(--color-error-ink);
+}
+.statement-totals {
+  margin-top: 0;
+}
+.statement-table td {
+  vertical-align: top;
+}

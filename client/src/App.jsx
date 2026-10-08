@@ -32,6 +32,8 @@ const Policies = lazy(() => import('./pages/supplier/Policies.jsx'));
 const SupplierRequests = lazy(() => import('./pages/supplier/Requests.jsx'));
 const SupplierTicket = lazy(() => import('./pages/supplier/SupplierTicket.jsx'));
 const SupplierOffers = lazy(() => import('./pages/supplier/SupplierOffers.jsx'));
+const SupplierStatements = lazy(() => import('./pages/supplier/Statements.jsx').then((m) => ({ default: m.Statements })));
+const SupplierStatement = lazy(() => import('./pages/supplier/Statements.jsx').then((m) => ({ default: m.StatementDetail })));
 const AdminConsole = lazy(() => import('./pages/admin/AdminConsole.jsx'));
 const AdminBookings = lazy(() => import('./pages/admin/AdminBookings.jsx'));
 const AdminBookingDetail = lazy(() => import('./pages/admin/AdminBookingDetail.jsx'));
@@ -41,6 +43,8 @@ const AdminSpecialRequests = lazy(() => import('./pages/admin/AdminSpecialReques
 const AdminOffers = lazy(() => import('./pages/admin/AdminOffers.jsx'));
 const AdminSettings = lazy(() => import('./pages/admin/AdminSettings.jsx'));
 const AdminSuppliers = lazy(() => import('./pages/admin/AdminSuppliers.jsx'));
+const AdminSettlement = lazy(() => import('./pages/admin/AdminSettlement.jsx').then((m) => ({ default: m.AdminSettlement })));
+const AdminStatement = lazy(() => import('./pages/admin/AdminSettlement.jsx').then((m) => ({ default: m.AdminStatement })));
 const OfferEditor = lazy(() => import('./pages/OfferEditor.jsx'));
 const Documents = lazy(() => import('./pages/Documents.jsx'));
 const HelpTicket = lazy(() => import('./pages/HelpTicket.jsx'));
@@ -120,6 +124,8 @@ export default function App() {
             <Route path="requests" element={<SupplierRequests />} />
             <Route path="tickets/:id" element={<SupplierTicket />} />
             <Route path="offers" element={<SupplierOffers />} />
+            <Route path="statements" element={<SupplierStatements />} />
+            <Route path="statements/:id" element={<SupplierStatement />} />
             <Route path="offers/new" element={<OfferEditor scope="supplier" />} />
             <Route path="offers/:id" element={<OfferEditor scope="supplier" key="edit" />} />
           </Route>
@@ -134,6 +140,8 @@ export default function App() {
             <Route path="offers/new" element={<OfferEditor scope="admin" />} />
             <Route path="offers/:id" element={<OfferEditor scope="admin" key="edit" />} />
             <Route path="suppliers" element={<AdminSuppliers />} />
+            <Route path="settlement" element={<AdminSettlement />} />
+            <Route path="settlement/:id" element={<AdminStatement />} />
             <Route path="settings" element={<AdminSettings />} />
             <Route path="audit" element={<AuditLog />} />
           </Route>

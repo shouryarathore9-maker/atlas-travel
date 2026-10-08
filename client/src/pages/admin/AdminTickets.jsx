@@ -10,16 +10,29 @@ export default function AdminTickets() {
   useDocumentTitle('Admin · Tickets');
   const [params, setParams] = useSearchParams();
   const status = params.get('status') || '';
+  const type = params.get('type') || '';
   const page = Number(params.get('page')) || 1;
-  const { data, error, reload } = useAsync((signal) => adminApi.tickets({ status, page }, { signal }), [status, page]);
+  const { data, error, reload } = useAsync((signal) => adminApi.tickets({ status, type, page }, { signal }), [status, type, page]);
+  const filter = (next) => setParams(Object.fromEntries(Object.entries({ status, type, ...next }).filter(([, v]) => v)));
   return (
     <>
       <h1 className="console-h1">Tickets</h1>
-      <p className="muted">Help tickets from travellers. Reply, close, or escalate to the booking’s airline or hotel.</p>
+      <p className="muted">Help tickets from travellers (reply, close, or escalate to the booking’s airline or hotel) and statement queries from suppliers (resolve as no change or an adjustment).</p>
+      <div className="row chip-row" role="group" aria-label="Filter by type">
+        {[
+          ['', 'All types'],
+          ['booking_problem', 'Help tickets'],
+          ['statement_query', 'Statement queries'],
+        ].map(([t, text]) => (
+          <button key={t || 'all'} type="button" className="chip-check" aria-pressed={type === t} onClick={() => filter({ type: t })}>
+            {text}
+          </button>
+        ))}
+      </div>
       <div className="row chip-row" role="group" aria-label="Filter by status">
-        {['', 'open', 'escalated', 'answered', 'closed'].map((s) => (
-          <button key={s || 'all'} type="button" className="chip-check" aria-pressed={status === s} onClick={() => setParams(s ? { status: s } : {})}>
-            {s ? TICKET_STATUS[s].label : 'All'}
+        {['', 'open', 'escalated', 'answered', 'resolved', 'closed'].map((s) => (
+          <button key={s || 'all'} type="button" className="chip-check" aria-pressed={status === s} onClick={() => filter({ status: s })}>
+            {s ? TICKET_STATUS[s].label : 'Any status'}
           </button>
         ))}
       </div>
@@ -44,6 +57,7 @@ export default function AdminTickets() {
                   <td>{formatDateTime(t.updatedAt)}</td>
                   <td>
                     <Link to={`/admin/tickets/${t._id}`}>{t.bookingReference}</Link>
+                    {t.type === 'statement_query' && <span className="block small muted">Statement query</span>}
                   </td>
                   <td>{t.supplierName || '—'}</td>
                   <td className="small ticket-preview">{t.messages[t.messages.length - 1]?.body}</td>

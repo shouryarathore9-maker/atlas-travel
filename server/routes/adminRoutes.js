@@ -12,6 +12,7 @@ import {
   suspendSupplier,
 } from '../controllers/adminController.js';
 import { adminOffers, offerInputSchema, offerListSchema } from '../controllers/offerController.js';
+import { adminStatement, adminStatements, adminStatementsSchema, markPaid, markPaidSchema, resolveQuery, resolveSchema } from '../controllers/statementController.js';
 import { getCommission, getLimits, listTemplates, updateCommission, updateLimits, updateTemplate } from '../controllers/pricingController.js';
 import { adminClose, adminEscalate, adminGet, adminList, adminListSchema, adminReply, escalateSchema, messageSchema } from '../controllers/ticketController.js';
 import { adminOnly, requireAuth } from '../middleware/auth.js';
@@ -35,6 +36,11 @@ router.get('/tickets/:id', adminGet);
 router.post('/tickets/:id/reply', validate(messageSchema), adminReply);
 router.post('/tickets/:id/close', adminClose);
 router.post('/tickets/:id/escalate', validate(escalateSchema), adminEscalate);
+router.post('/tickets/:id/resolve', validate(resolveSchema), resolveQuery);
+
+router.get('/statements', validate(adminStatementsSchema, 'query'), adminStatements);
+router.get('/statements/:id', adminStatement);
+router.post('/statements/:id/mark-paid', validate(markPaidSchema), markPaid);
 
 router.get('/offers', validate(offerListSchema, 'query'), adminOffers.list);
 router.post('/offers', validate(offerInputSchema), adminOffers.create);

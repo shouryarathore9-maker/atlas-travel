@@ -95,18 +95,19 @@ export default function Requests() {
       </section>
 
       <section className="console-section">
-        <h2 className="h3">Escalated tickets</h2>
+        <h2 className="h3">Escalated tickets and statement queries</h2>
         {tickets.error && <ErrorState error={tickets.error} onRetry={tickets.reload} />}
-        {tickets.data && tickets.data.tickets.length === 0 && <p className="muted">No tickets have been escalated to you.</p>}
+        {tickets.data && tickets.data.tickets.length === 0 && <p className="muted">No tickets have been escalated to you, and you haven’t queried a statement.</p>}
         {tickets.data && tickets.data.tickets.length > 0 && (
           <ul className="plain-list ticket-list">
             {tickets.data.tickets.map((t) => (
               <li key={t._id} className="card spread">
                 <div>
                   <Link to={`/supplier/tickets/${t._id}`}>{t.bookingReference}</Link>
+                  {t.type === 'statement_query' && <span className="small muted"> · statement query</span>}
                   <p className="small muted">{t.messages[0]?.body.slice(0, 120)}</p>
                 </div>
-                <span className={`badge ${TICKET_STATUS[t.status]?.tone}`}>{t.status === 'escalated' ? 'Needs your reply' : TICKET_STATUS[t.status]?.label}</span>
+                <span className={`badge ${TICKET_STATUS[t.status]?.tone}`}>{t.type === 'statement_query' ? (t.status === 'resolved' ? 'Resolved' : 'With Atlas') : t.status === 'escalated' ? 'Needs your reply' : TICKET_STATUS[t.status]?.label}</span>
               </li>
             ))}
           </ul>

@@ -16,9 +16,22 @@ export default function SupplierTicket() {
       <Link to="/supplier/requests" className="btn-text back-link">
         ← Requests &amp; tickets
       </Link>
-      <h1 className="console-h1">Ticket {data.ticket.bookingReference}</h1>
-      <p className="muted small">Atlas support asked you to help. Your reply goes straight to the traveller; Atlas can see it too.</p>
-      <TicketThread ticket={data.ticket} me="supplier" replyLabel="Reply to the traveller" onReply={async (m) => setData(await supplierApi.replyTicket(id, m))} />
+      {data.ticket.type === 'statement_query' ? (
+        <>
+          <h1 className="console-h1">Statement query {data.ticket.bookingReference}</h1>
+          <p className="muted small">
+            {data.ticket.subject}. Atlas support answers with “no change” or an adjustment on your next statement.{' '}
+            {data.ticket.statementId && <Link to={`/supplier/statements/${data.ticket.statementId}`}>View the statement</Link>}
+          </p>
+          <TicketThread ticket={data.ticket} me="supplier" replyLabel="Reply to Atlas" onReply={async (m) => setData(await supplierApi.replyTicket(id, m))} />
+        </>
+      ) : (
+        <>
+          <h1 className="console-h1">Ticket {data.ticket.bookingReference}</h1>
+          <p className="muted small">Atlas support asked you to help. Your reply goes straight to the traveller; Atlas can see it too.</p>
+          <TicketThread ticket={data.ticket} me="supplier" replyLabel="Reply to the traveller" onReply={async (m) => setData(await supplierApi.replyTicket(id, m))} />
+        </>
+      )}
     </div>
   );
 }

@@ -7,6 +7,7 @@ const LINKS = [
   { to: '/admin/tickets', label: 'Tickets', icon: 'alert' },
   { to: '/admin/special-requests', label: 'Special requests', icon: 'check' },
   { to: '/admin/offers', label: 'Offers', icon: 'receipt' },
+  { to: '/admin/settlement', label: 'Settlement', icon: 'list' },
   { to: '/admin/settings', label: 'Settings', icon: 'compass' },
   { to: '/admin/audit', label: 'Audit log', icon: 'list' },
 ];

@@ -127,6 +127,9 @@ export async function adminReply(req, res) {
   ticket.status = 'answered';
   await ticket.save();
   if (ticket.travellerId) await notifyUser(ticket.travellerId, { type: 'ticket.reply', title: `Atlas support replied · ${ticket.bookingReference}`, body: req.validated.body.message.slice(0, 140), link: `/help/${ticket._id}` });
+  if (ticket.type === 'statement_query') {
+    await notifySupplier(ticket.supplierId, { type: 'ticket.reply', title: `Atlas replied to your statement query · ${ticket.bookingReference}`, body: req.validated.body.message.slice(0, 140), link: `/supplier/tickets/${ticket._id}` });
+  }
   await audit(req, { action: 'ticket.reply', target: { type: 'ticket', id: ticket._id, label: label(ticket) } });
   res.json({ ticket: view(ticket.toObject()) });
 }
@@ -158,21 +161,26 @@ export async function adminEscalate(req, res) {
   res.json({ ticket: view(ticket.toObject()) });
 }
 
-// ---------- Supplier (escalated tickets only, own supplier only) ----------
+// ---------- Supplier (escalated tickets and own statement queries, own supplier only) ----------
+
+const visibleToSupplier = (t) => t.type === 'statement_query' || t.status === 'escalated' || t.messages.some((m) => m.authorRole === 'supplier');
 
 export async function supplierList(req, res) {
-  const tickets = await Ticket.find({ supplierId: req.supplierId, type: 'booking_problem', status: { $in: ['escalated', 'answered', 'closed'] } })
+  const tickets = await Ticket.find({
+    supplierId: req.supplierId,
+    $or: [{ type: 'booking_problem', status: { $in: ['escalated', 'answered', 'closed'] } }, { type: 'statement_query' }],
+  })
     .sort({ updatedAt: -1 })
     .limit(100)
     .lean();
-  // Only tickets that were escalated to this supplier at some point.
-  res.json({ tickets: tickets.filter((t) => t.status === 'escalated' || t.messages.some((m) => m.authorRole === 'supplier')).map(view) });
+  // Booking tickets only if they were escalated to this supplier at some point.
+  res.json({ tickets: tickets.filter(visibleToSupplier).map(view) });
 }
 
 async function supplierTicket(req) {
   if (!mongoose.isValidObjectId(req.params.id)) throw notFound();
-  const ticket = await Ticket.findOne({ _id: req.params.id, supplierId: req.supplierId, type: 'booking_problem' });
-  if (!ticket || !(ticket.status === 'escalated' || ticket.messages.some((m) => m.authorRole === 'supplier'))) throw notFound();
+  const ticket = await Ticket.findOne({ _id: req.params.id, supplierId: req.supplierId });
+  if (!ticket || !visibleToSupplier(ticket)) throw notFound();
   return ticket;
 }
 
@@ -182,8 +190,16 @@ export async function supplierGet(req, res) {
 
 export async function supplierReply(req, res) {
   const ticket = await supplierTicket(req);
-  if (ticket.status === 'closed') throw new HttpError(409, 'This ticket is closed.', 'TICKET_CLOSED');
+  if (ticket.status === 'closed' || ticket.status === 'resolved') throw new HttpError(409, 'This ticket is closed.', 'TICKET_CLOSED');
   addMessage(ticket, 'supplier', req.supplier.name, req.validated.body.message);
+  if (ticket.type === 'statement_query') {
+    // A statement query goes back to Atlas support.
+    ticket.status = 'open';
+    await ticket.save();
+    await notifyAdmins({ type: 'ticket.reply', title: `${req.supplier.name} replied · query ${ticket.bookingReference}`, link: `/admin/tickets/${ticket._id}` });
+    await audit(req, { action: 'ticket.supplier_reply', target: { type: 'ticket', id: ticket._id, label: label(ticket) } });
+    return res.json({ ticket: view(ticket.toObject()) });
+  }
   ticket.status = 'answered';
   await ticket.save();
   if (ticket.travellerId) await notifyUser(ticket.travellerId, { type: 'ticket.reply', title: `${req.supplier.name} replied · ${ticket.bookingReference}`, body: req.validated.body.message.slice(0, 140), link: `/help/${ticket._id}` });

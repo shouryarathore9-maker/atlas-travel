@@ -13,6 +13,10 @@ import CancellationTemplate from '../models/CancellationTemplate.js';
 import Config, { DEFAULT_COMMISSION_RATE } from '../models/Config.js';
 import Offer from '../models/Offer.js';
 import Photo from '../models/Photo.js';
+import Adjustment from '../models/Adjustment.js';
+import DailyStat from '../models/DailyStat.js';
+import Event from '../models/Event.js';
+import Statement from '../models/Statement.js';
 import Ticket from '../models/Ticket.js';
 import Booking from '../models/Booking.js';
 import Flight from '../models/Flight.js';
@@ -31,7 +35,9 @@ import {
   generateReviews,
   generateServices,
 } from './generate.js';
+import { generateHistory, HISTORY_EMAIL_DOMAIN, seedSettlementHistory } from './history.js';
 import { generateOffers } from './offers.js';
+import { closeStatements, istPeriod, periodLabel, periodStart, shiftPeriod } from '../services/settlement.js';
 import { DEFAULT_TEMPLATES } from '../services/templates.js';
 
 // Admin and demo traveller passwords come only from server/.env (never committed): the same
@@ -110,7 +116,7 @@ async function main() {
 
   const offers = generateOffers({ suppliers: [...airlineSuppliers, ...hotelSuppliers] });
 
-  const models = [Supplier, Service, Flight, Hotel, Review, Booking, Payment, Notification, AuditLog, Offer, Ticket, CancellationTemplate, Config, Photo];
+  const models = [Supplier, Service, Flight, Hotel, Review, Booking, Payment, Notification, AuditLog, Offer, Ticket, CancellationTemplate, Config, Photo, Statement, Adjustment, Event, DailyStat];
   await Promise.all(models.map((Model) => Model.deleteMany({})));
   await mongoose.connection.db.dropCollection('coupons').catch(() => {}); // Phase 1 stub, replaced by offers
   await Promise.all([...models, User].map((Model) => Model.syncIndexes()));
@@ -147,10 +153,32 @@ async function main() {
   }
   writeCredentials(managers);
 
+  // Six months of synthetic history: past trips, payments, funnel summaries, then the monthly statements.
+  const history = generateHistory({
+    airlineSuppliers,
+    hotelSuppliers,
+    services,
+    hotels,
+    offers,
+    templates: Object.fromEntries(DEFAULT_TEMPLATES.map((t) => [t.key, t])),
+  });
+  await User.deleteMany({ email: new RegExp(`@${HISTORY_EMAIL_DOMAIN.replace(/\./g, '\\.')}$`) });
+  await insertInChunks(User, history.users);
+  // Keep the historical createdAt (Mongoose would otherwise stamp "now").
+  for (let i = 0; i < history.bookings.length; i += 500) await Booking.insertMany(history.bookings.slice(i, i + 500), { ordered: false, timestamps: false });
+  await insertInChunks(Payment, history.payments);
+  await insertInChunks(DailyStat, history.dailyStats);
+  for (const [offerId, used] of Object.entries(history.offerUse)) {
+    const offer = offers.find((o) => String(o._id) === offerId);
+    if (offer.status !== 'exhausted') await Offer.updateOne({ _id: offerId }, { $inc: { redemptions: used } });
+  }
+  const settlement = await seedSettlementHistory({ Statement, Ticket, Adjustment, closeStatements, istPeriod, periodStart, shiftPeriod, periodLabel });
+
   console.log(
     `Seeded ${airlineSuppliers.length + hotelSuppliers.length} suppliers, ${services.length} services, ` +
       `${flights.length} departures (${SEED_DAYS} days), ${hotels.length} hotels, ${reviews.length} reviews, ${offers.length} offers.`,
   );
+  console.log(`History: ${history.bookings.length} past bookings, ${history.payments.length} payments, ${settlement.statements} statements over ${settlement.periods} months.`);
   console.log(`Accounts: ${DEMO_USERS.map((u) => `${u.email} (${u.role})`).join(', ')} — passwords are the SEED_* values in server/.env`);
   console.log(`${managers.length} manager accounts — passwords in server/manager-credentials.local.md (git-ignored)`);
   console.timeEnd('seed');

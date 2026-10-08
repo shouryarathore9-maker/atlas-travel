@@ -105,6 +105,9 @@ export const supplierApi = {
   tickets: (opts) => api('/supplier/tickets', opts),
   ticket: (id, opts) => api(`/supplier/tickets/${id}`, opts),
   replyTicket: (id, message) => api(`/supplier/tickets/${id}/messages`, { method: 'POST', body: { message } }),
+  statements: (opts) => api('/supplier/statements', opts),
+  statement: (id, opts) => api(`/supplier/statements/${id}`, opts),
+  queryLine: (id, ref, note) => api(`/supplier/statements/${id}/lines/${encodeURIComponent(ref)}/query`, { method: 'POST', body: { note } }),
   offers: offerAdmin('/supplier'),
 };
 
@@ -121,6 +124,10 @@ export const adminApi = {
   replyTicket: (id, message) => api(`/admin/tickets/${id}/reply`, { method: 'POST', body: { message } }),
   closeTicket: (id) => api(`/admin/tickets/${id}/close`, { method: 'POST' }),
   escalateTicket: (id, message) => api(`/admin/tickets/${id}/escalate`, { method: 'POST', body: message ? { message } : {} }),
+  resolveQuery: (id, body) => api(`/admin/tickets/${id}/resolve`, { method: 'POST', body }),
+  statements: (query, opts) => api('/admin/statements', { query, ...opts }),
+  statement: (id, opts) => api(`/admin/statements/${id}`, opts),
+  markPaid: (id, paymentRef) => api(`/admin/statements/${id}/mark-paid`, { method: 'POST', body: { paymentRef } }),
   offers: offerAdmin('/admin'),
   templates: (opts) => api('/admin/templates', opts),
   saveTemplate: (key, body) => api(`/admin/templates/${key}`, { method: 'PUT', body }),
