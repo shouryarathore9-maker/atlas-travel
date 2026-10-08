@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   featuredQuerySchema,
   getHotel,
+  hotelDetailSchema,
   hotelSearchSchema,
   listCities,
   listFeatured,
@@ -14,6 +15,6 @@ const router = Router();
 router.get('/', validate(hotelSearchSchema, 'query'), searchHotels);
 router.get('/cities', listCities);
 router.get('/featured', validate(featuredQuerySchema, 'query'), listFeatured);
-router.get('/:id', getHotel);
+router.get('/:id', validate(hotelDetailSchema, 'query'), getHotel);
 
 export default router;

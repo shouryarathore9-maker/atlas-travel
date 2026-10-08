@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
-import { AIRCRAFT, cabinCapacity, hasCabin, seatLetters } from '../services/aircraft.js';
+import { AIRCRAFT, seatLetters } from '../services/aircraft.js';
+import { BREAKFAST_BY_STARS, defaultAirlineRateCard, defaultHotelRateCard } from '../services/pricing.js';
 import { addDays, istMidnight, todayIstString } from '../utils/dates.js';
 import {
   AIRLINES,
@@ -9,7 +10,6 @@ import {
   HOTEL_PHOTO_COUNT,
   HOTEL_REVIEWS,
   HOTELS_BY_CITY,
-  MEALS,
   REVIEWER_NAMES,
   ROOM_AMENITIES,
   ROOM_TYPES,
@@ -70,6 +70,8 @@ export function generateAirlineSuppliers() {
     name: airline.name,
     code: airline.code,
     slug: airline.slug,
+    rateCard: defaultAirlineRateCard(airline.name),
+    policies: { mealsByCabin: { economy: null, business: null }, blockedSeats: {} },
   }));
 }
 
@@ -86,7 +88,6 @@ export function generateServices({ airlineSuppliers, startDate = todayIstString(
     const destination = byCode[to];
     const km = distanceKm(origin, destination);
     const baseDuration = round(45 + km / 12, 5);
-    const basePrice = round(2200 + km * 3.6, 50);
 
     DEPARTURE_SLOTS.forEach((slot, i) => {
       const airline = AIRLINES[(routeIndex + i) % AIRLINES.length];
@@ -112,10 +113,6 @@ export function generateServices({ airlineSuppliers, startDate = todayIstString(
         endDate: null,
         status: 'active',
         rating: { average: 0, count: 0 },
-        interim: {
-          basePrice: round(basePrice * (0.9 + rng.next() * 0.3 - stops * 0.08), 50),
-          mealOptions: rng.sample(MEALS, rng.int(3, 5)),
-        },
       });
     });
   });
@@ -131,57 +128,27 @@ export function operatesOn(service, dateStr) {
   return service.daysOfWeek.includes(weekday);
 }
 
-// One dated departure of a service. Deterministic per (service, date). Fares, seat map and meals
-// are the Phase 1 interim values until the pricing engine (Stage 2) and cabin seat maps (Stage 3).
-export function departureFor(service, dateStr, { now = Date.now() } = {}) {
+// One dated departure of a service. Deterministic per (service, date). Prices aren't stored: the
+// engine prices it from the airline's rate card. Some seats start out taken (other passengers) so
+// the demand factor and the seat map look realistic; `blocked` seats come from the airline's policy.
+export function departureFor(service, dateStr, { now = Date.now(), blocked = [] } = {}) {
   const departure = new Date(istMidnight(dateStr).getTime() + service.departureMinute * 60000);
   if (departure.getTime() < now + 2 * 3600 * 1000) return null;
   const rng = createRng(hashSeed(`${service._id}|${dateStr}`));
-  const daysAhead = Math.round((istMidnight(dateStr) - istMidnight(todayIstString(now))) / 86400000);
-  const urgency = daysAhead < 3 ? 1.18 : daysAhead < 7 ? 1.06 : 1;
-  const saver = round((service.interim?.basePrice || 4000) * urgency * (0.92 + rng.next() * 0.16), 50);
-  const economy = AIRCRAFT[service.aircraftConfig].cabins.economy;
-  const letters = seatLetters(economy);
-  const economySeats = cabinCapacity(service.aircraftConfig, 'economy');
-
-  const fareOptions = [
-    {
-      type: 'Saver',
-      price: saver,
-      cabinBaggageKg: 7,
-      checkinBaggageKg: 15,
-      cancellationPolicy: { freeUntilHoursBeforeDeparture: 0, feeAfterCutoff: 3500 },
-      dateChangeFee: 3000,
-      seatsAvailable: Math.min(rng.int(20, 60), economySeats),
-    },
-    {
-      type: 'Flexi',
-      price: round(saver * 1.22, 50),
-      cabinBaggageKg: 7,
-      checkinBaggageKg: 20,
-      cancellationPolicy: { freeUntilHoursBeforeDeparture: 24, feeAfterCutoff: 1500 },
-      dateChangeFee: 0,
-      seatsAvailable: rng.int(10, 30),
-    },
-  ];
-  if (hasCabin(service.aircraftConfig, 'business')) {
-    fareOptions.push({
-      type: 'Business',
-      price: round(saver * 3.1, 50),
-      cabinBaggageKg: 12,
-      checkinBaggageKg: 35,
-      cancellationPolicy: { freeUntilHoursBeforeDeparture: 6, feeAfterCutoff: 1000 },
-      dateChangeFee: 0,
-      seatsAvailable: Math.min(rng.int(6, 12), cabinCapacity(service.aircraftConfig, 'business')),
-    });
+  const config = AIRCRAFT[service.aircraftConfig];
+  const blockedSet = new Set(blocked);
+  const taken = new Set();
+  const cabins = {};
+  for (const [name, cabin] of Object.entries(config.cabins)) {
+    const seats = cabin.rows.flatMap((row) => seatLetters(cabin).map((l) => `${row}${l}`)).filter((seat) => !blockedSet.has(seat));
+    // Earlier departures are fuller; business sells less.
+    const daysAhead = Math.round((istMidnight(dateStr) - istMidnight(todayIstString(now))) / 86400000);
+    const share = name === 'business' ? rng.next() * 0.5 : Math.min(0.8, 0.1 + rng.next() * 0.35 + (daysAhead < 10 ? 0.25 : 0));
+    const sold = Math.floor(seats.length * share);
+    const pool = rng.sample(seats, sold);
+    pool.forEach((seat) => taken.add(seat));
+    cabins[name] = { capacity: seats.length, sold };
   }
-
-  // Interim seat map: the economy cabin's size, numbered from row 1 (Stage 3 draws real cabins).
-  const rows = economy.rows.length;
-  const unavailable = new Set();
-  const taken = Math.min(rng.int(12, 30), Math.floor((rows * letters.length) / 3));
-  while (unavailable.size < taken) unavailable.add(`${rng.int(1, rows)}${'ABCDEF'[rng.int(0, letters.length - 1)]}`);
-
   return {
     _id: new mongoose.Types.ObjectId(),
     supplierId: service.supplierId,
@@ -190,7 +157,7 @@ export function departureFor(service, dateStr, { now = Date.now() } = {}) {
     aircraftConfig: service.aircraftConfig,
     airline: service.airline,
     flightNumber: service.flightNumber,
-    aircraftType: AIRCRAFT[service.aircraftConfig].name,
+    aircraftType: config.name,
     origin: service.origin,
     destination: service.destination,
     departureTime: departure,
@@ -199,27 +166,21 @@ export function departureFor(service, dateStr, { now = Date.now() } = {}) {
     stops: service.stops,
     status: 'scheduled',
     salesStopped: false,
-    fareOptions,
-    mealOptions: service.interim?.mealOptions || MEALS.slice(0, 4),
-    seatMap: {
-      rows,
-      columns: letters.length,
-      unavailableSeats: [...unavailable],
-      seatPricing: { window: 350, aisle: 300, middle: 0 },
-    },
+    cabins: { economy: cabins.economy, business: cabins.business || null },
+    seatMap: { unavailableSeats: [...taken, ...blockedSet], blockedSeats: [...blockedSet] },
     rating: service.rating || { average: 0, count: 0 },
   };
 }
 
 // Every departure of these services in the window [today, today + days).
-export function generateDepartures(services, { days = 60, now = Date.now() } = {}) {
+export function generateDepartures(services, { days = 60, now = Date.now(), blockedFor = () => [] } = {}) {
   const today = todayIstString(now);
   const flights = [];
   for (let day = 0; day < days; day++) {
     const dateStr = addDays(today, day);
     for (const service of services) {
       if (!operatesOn(service, dateStr)) continue;
-      const flight = departureFor(service, dateStr, { now });
+      const flight = departureFor(service, dateStr, { now, blocked: blockedFor(service) });
       if (flight) flights.push(flight);
     }
   }
@@ -253,11 +214,12 @@ export function generateHotels({ rng = createRng(11) } = {}) {
           bedType: room.bedType,
           amenities: rng.sample(ROOM_AMENITIES, rng.int(3, 6)),
           breakfastIncluded: rng.next() < (stars === 3 ? 0.3 : 0.6),
-          price,
           taxesAndFees: round(price * (price > 7500 ? 0.18 : 0.12), 10),
-          cancellationPolicy: { freeUntilDaysBeforeCheckIn: freeDays, feeAfterCutoff: price },
           roomsAvailable: rooms,
           roomsTotal: rooms,
+          // Seed-only: becomes the rate card's base rate and the flexible plan's template.
+          seedBaseRate: price,
+          seedFreeDays: freeDays,
         };
       });
       const photos = [0, 1, 2].map((k) => `/images/seed/hotels/hotel-${((photoCursor + k) % HOTEL_PHOTO_COUNT) + 1}.jpg`);
@@ -283,14 +245,25 @@ export function generateHotels({ rng = createRng(11) } = {}) {
   return hotels;
 }
 
+const FLEX_TEMPLATE_BY_DAYS = { 0: 'H-STRICT', 1: 'H-FREE1', 2: 'H-FREE2', 3: 'H-FREE3' };
+
+// One supplier per hotel, with a rate card built from the Phase 1 seed prices. Strips the seed-only
+// fields from the hotel's room types (prices live in the rate card, terms in templates).
 export function generateHotelSuppliers(hotels) {
-  return hotels.map((hotel) => ({
-    _id: new mongoose.Types.ObjectId(),
-    kind: 'hotel',
-    name: hotel.name,
-    hotelId: hotel._id,
-    slug: slugify(hotel.name),
-  }));
+  return hotels.map((hotel) => {
+    const baseRates = Object.fromEntries(hotel.roomTypes.map((r) => [r.name, r.seedBaseRate]));
+    const flexibleTemplate = FLEX_TEMPLATE_BY_DAYS[hotel.roomTypes[0].seedFreeDays] || 'H-FREE1';
+    hotel.roomTypes = hotel.roomTypes.map(({ seedBaseRate: _rate, seedFreeDays: _days, ...room }) => room);
+    return {
+      _id: new mongoose.Types.ObjectId(),
+      kind: 'hotel',
+      name: hotel.name,
+      hotelId: hotel._id,
+      slug: slugify(hotel.name),
+      rateCard: { ...defaultHotelRateCard({ baseRates, starRating: hotel.starRating, flexibleTemplate }), breakfastPerGuest: BREAKFAST_BY_STARS[hotel.starRating] },
+      policies: {},
+    };
+  });
 }
 
 function reviewsFor(itemType, item, count, ratingPool, comments, rng, now) {

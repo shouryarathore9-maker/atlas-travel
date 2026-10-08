@@ -24,11 +24,6 @@ const serviceSchema = new mongoose.Schema({
   endDate: { type: String, default: null },
   status: { type: String, enum: ['active', 'discontinued'], default: 'active' },
   rating: { average: { type: Number, default: 0 }, count: { type: Number, default: 0 } },
-  // Phase 1 fares and meals carried over until the pricing engine (Stage 2) and cabin menus (Stage 3).
-  interim: {
-    basePrice: Number,
-    mealOptions: [{ _id: false, name: String, price: Number, isVeg: Boolean }],
-  },
 });
 
 serviceSchema.plugin(sandboxScope);

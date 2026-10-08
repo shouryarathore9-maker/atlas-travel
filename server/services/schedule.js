@@ -4,6 +4,7 @@
 import Booking from '../models/Booking.js';
 import Flight from '../models/Flight.js';
 import Service from '../models/Service.js';
+import Supplier from '../models/Supplier.js';
 import { departureFor, operatesOn } from '../seed/generate.js';
 import { addDays, DAY_MS, todayIstString } from '../utils/dates.js';
 
@@ -39,6 +40,9 @@ export async function materialiseDepartures({ days = WINDOW_DAYS, now = Date.now
     { serviceId: 1, date: 1 },
   ).lean();
   const have = new Set(existing.map((f) => `${f.serviceId}|${f.date}`));
+  const suppliers = await Supplier.find({ _id: { $in: [...new Set(services.map((s) => String(s.supplierId)))] } }, { policies: 1 }).lean();
+  const blockedBySupplier = Object.fromEntries(suppliers.map((s) => [String(s._id), s.policies?.blockedSeats || {}]));
+  const blockedFor = (service) => blockedBySupplier[String(service.supplierId)]?.[service.aircraftConfig] || [];
 
   const docs = [];
   const daysFilled = [];
@@ -47,7 +51,7 @@ export async function materialiseDepartures({ days = WINDOW_DAYS, now = Date.now
     let added = false;
     for (const service of services) {
       if (have.has(`${service._id}|${dateStr}`) || !operatesOn(service, dateStr)) continue;
-      const flight = departureFor(service, dateStr, { now });
+      const flight = departureFor(service, dateStr, { now, blocked: blockedFor(service) });
       if (!flight) continue;
       docs.push(flight);
       added = true;

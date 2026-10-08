@@ -1,118 +1,95 @@
 import mongoose from 'mongoose';
 import { z } from 'zod';
 import Booking from '../models/Booking.js';
-import Flight from '../models/Flight.js';
-import Hotel from '../models/Hotel.js';
 import Payment from '../models/Payment.js';
-import { istMidnight } from '../utils/dates.js';
+import User from '../models/User.js';
 import { HttpError } from '../utils/httpError.js';
-import { personName } from '../utils/names.js';
-import { dateString } from '../utils/query.js';
-import { notifySupplier, notifyUser } from '../services/notify.js';
 import { formatInr } from '../utils/format.js';
+import { splitName } from '../utils/names.js';
+import { dateString } from '../utils/query.js';
 import {
+  generatePnr,
   generateReference,
   generateTransactionId,
-  priceFlight,
-  priceHotel,
+  normaliseName,
   releaseInventory,
   reserveInventory,
+  ticketNumber,
 } from '../services/bookingService.js';
+import { notifySupplier, notifyUser } from '../services/notify.js';
+import { claimRedemption } from '../services/offers.js';
+import { quoteBooking, quoteView } from '../services/quote.js';
 
 const objectId = z.string().refine((id) => mongoose.isValidObjectId(id), 'Invalid item id');
-const travellerName = personName();
 const contactSchema = z.object({
   email: z.string().trim().toLowerCase().email('Enter a valid email address'),
   phone: z.string().trim().regex(/^\d{10}$/, 'Enter a 10-digit mobile number'),
 });
+const specialRequest = z.string().trim().max(500, 'Special requests can be at most 500 characters').optional().default('');
 
-const flightBookingSchema = z.object({
+const flightBooking = z.object({
   type: z.literal('flight'),
   itemId: objectId,
-  fareType: z.string().trim().min(1),
+  fareType: z.string().trim().min(1).max(40),
   travellers: z
     .array(
-      z.object({
-        name: travellerName,
-        ageCategory: z.enum(['adult', 'child']),
-        seat: z.string().trim().toUpperCase().optional().default(''),
-        meal: z.string().trim().max(80).optional().default(''),
-      }),
+      splitName.and(
+        z.object({
+          ageCategory: z.enum(['adult', 'child', 'infant']),
+          seat: z.string().trim().toUpperCase().max(4).optional().default(''),
+          meal: z.string().trim().max(80).optional().default(''),
+        }),
+      ),
     )
     .min(1, 'Add at least one traveller')
-    .max(9),
-  contact: contactSchema,
+    .max(18),
+  specialRequest,
 });
 
-const hotelBookingSchema = z.object({
+const hotelBooking = z.object({
   type: z.literal('hotel'),
   itemId: objectId,
-  roomTypeName: z.string().trim().min(1),
+  roomTypeName: z.string().trim().min(1).max(60),
+  ratePlan: z.enum(['flexible', 'nonrefundable']).default('flexible'),
+  breakfast: z.boolean().optional().default(false),
   rooms: z.number().int().min(1).max(8),
   checkIn: dateString,
   checkOut: dateString,
   adults: z.number().int().min(1).max(24),
   children: z.number().int().min(0).max(12).default(0),
-  guests: z
-    .array(z.object({ name: travellerName, ageCategory: z.enum(['adult', 'child']) }))
-    .min(1, 'Add at least one guest')
-    .max(24),
-  specialRequests: z.string().trim().max(500).optional().default(''),
-  contact: contactSchema,
+  guests: z.array(splitName).min(1, 'Add the lead guest').max(1),
+  specialRequest,
 });
+
+const bookingInput = z.discriminatedUnion('type', [flightBooking, hotelBooking]);
+const offerCode = z.string().trim().toUpperCase().max(20).optional().default('');
+
+export const quoteSchema = z.object({ booking: bookingInput, offerCode });
 
 // Card/UPI details are never part of this payload: the checkout UI validates them locally and discards them.
 export const mockPaymentSchema = z.object({
   idempotencyKey: z.string().min(8).max(100),
   method: z.enum(['upi', 'card']),
   simulateFailure: z.boolean().optional().default(false),
-  booking: z.discriminatedUnion('type', [flightBookingSchema, hotelBookingSchema]),
+  expectedTotal: z.number().int().min(0).optional(), // the total the traveller saw
+  offerCode,
+  saveTravellers: z.boolean().optional().default(false),
+  booking: bookingInput.and(z.object({ contact: contactSchema })),
 });
 
-async function buildFlightBooking(input) {
-  const flight = await Flight.findById(input.itemId).lean();
-  if (!flight) throw new HttpError(404, 'We could not find that flight.', 'NOT_FOUND');
-  const { fareBreakdown, policySnapshot } = priceFlight(flight, input);
-  return {
-    type: 'flight',
-    itemId: flight._id,
-    supplierId: flight.supplierId ?? null,
-    selection: { fareType: input.fareType },
-    travelDates: { start: flight.departureTime, end: flight.arrivalTime },
-    travellers: input.travellers,
-    contact: input.contact,
-    fareBreakdown,
-    policySnapshot,
-    itemSummary: {
-      title: `${flight.origin.city} → ${flight.destination.city}`,
-      subtitle: `${flight.airline} ${flight.flightNumber} · ${input.fareType}`,
-      origin: flight.origin.code,
-      destination: flight.destination.code,
-    },
-  };
+// prd.md → Booking limits: at most this many upcoming hotel stays per account.
+export const MAX_UPCOMING_STAYS = 5;
+
+function assertCanBook(user) {
+  if (user.role !== 'traveler') {
+    throw new HttpError(403, 'Staff accounts can’t make bookings. Sign in with a traveller account to book.', 'STAFF_CANNOT_BOOK');
+  }
 }
 
-async function buildHotelBooking(input) {
-  const hotel = await Hotel.findById(input.itemId).lean();
-  if (!hotel) throw new HttpError(404, 'We could not find that hotel.', 'NOT_FOUND');
-  const { fareBreakdown, policySnapshot, nights } = priceHotel(hotel, input);
-  return {
-    type: 'hotel',
-    itemId: hotel._id,
-    supplierId: hotel.supplierId ?? null,
-    selection: { roomTypeName: input.roomTypeName, rooms: input.rooms },
-    travelDates: { start: istMidnight(input.checkIn), end: istMidnight(input.checkOut) },
-    travellers: input.guests.map((g, i) => ({ ...g, specialRequests: i === 0 ? input.specialRequests : '' })),
-    contact: input.contact,
-    fareBreakdown,
-    policySnapshot,
-    itemSummary: {
-      title: hotel.name,
-      subtitle: `${input.roomTypeName} · ${input.rooms} room${input.rooms > 1 ? 's' : ''} · ${nights} night${nights > 1 ? 's' : ''}`,
-      image: hotel.photos?.[0] || '',
-      destination: hotel.city,
-    },
-  };
+export async function quote(req, res) {
+  assertCanBook(req.user);
+  const { booking, offerCode: code } = req.validated.body;
+  res.json(quoteView(await quoteBooking(booking, { userId: req.user._id, offerCode: code })));
 }
 
 // The winning request reserves inventory a few milliseconds before its booking is saved,
@@ -126,21 +103,36 @@ async function awaitConcurrentBooking(userId, idempotencyKey, attempts = 5, dela
   return null;
 }
 
-// prd.md → Booking limits: at most this many upcoming hotel stays per account (hotel rooms are a
-// simple counter held until check-out, so this keeps one account from tying up a hotel).
-export const MAX_UPCOMING_STAYS = 5;
+function priceChanged(res, previous, quoted, reason) {
+  return res.status(409).json({
+    error: {
+      code: 'PRICE_CHANGED',
+      message: `The price changed from ${formatInr(previous)} to ${formatInr(quoted.draft.fareBreakdown.total)}. No payment was taken — check the new total and pay again.`,
+      reason,
+    },
+    quote: quoteView(quoted),
+  });
+}
+
+async function saveTravellersFor(user, travellers) {
+  const saved = user.savedTravellers || [];
+  const have = new Set(saved.map((t) => normaliseName(t.firstName, t.lastName)));
+  const fresh = travellers
+    .filter((t) => !have.has(normaliseName(t.firstName, t.lastName)))
+    .map((t) => ({ firstName: t.firstName, lastName: t.lastName, ageCategory: t.ageCategory }));
+  if (!fresh.length) return;
+  await User.updateOne({ _id: user._id }, { $push: { savedTravellers: { $each: fresh, $slice: 20 } } });
+}
 
 export async function mockPayment(req, res) {
-  const { idempotencyKey, method, simulateFailure, booking: input } = req.validated.body;
+  const { idempotencyKey, method, simulateFailure, expectedTotal, offerCode: code, saveTravellers, booking: input } = req.validated.body;
   const userId = req.user._id;
 
   // A retried request (double-click, refresh, flaky network) returns the booking it already made.
   const existing = await Booking.findOne({ userId, idempotencyKey });
   if (existing) return res.status(200).json({ booking: existing, payment: { status: 'success' } });
 
-  if (req.user.role !== 'traveler') {
-    throw new HttpError(403, 'Staff accounts can’t make bookings. Sign in with a traveller account to book.', 'STAFF_CANNOT_BOOK');
-  }
+  assertCanBook(req.user);
   if (input.type === 'hotel') {
     const upcomingStays = await Booking.countDocuments({ userId, type: 'hotel', status: 'confirmed', 'travelDates.end': { $gt: new Date() } });
     if (upcomingStays >= MAX_UPCOMING_STAYS) {
@@ -152,17 +144,22 @@ export async function mockPayment(req, res) {
     }
   }
 
-  let draft;
+  let quoted;
   try {
-    draft = input.type === 'flight' ? await buildFlightBooking(input) : await buildHotelBooking(input);
+    quoted = await quoteBooking(input, { userId, offerCode: code });
   } catch (err) {
     // An identical request (double-click, retry) may have just booked these seats/rooms itself.
-    // In that case answer with its booking rather than a misleading "no longer available".
     const winner = await awaitConcurrentBooking(userId, idempotencyKey);
     if (winner) return res.status(200).json({ booking: winner, payment: { status: 'success' } });
     throw err;
   }
+  const { draft } = quoted;
   const amount = draft.fareBreakdown.total;
+
+  // The server re-prices at payment; a different total is never charged silently.
+  if (expectedTotal !== undefined && expectedTotal !== amount) {
+    return priceChanged(res, expectedTotal, quoted, quoted.codeError || 'Prices moved since you last looked.');
+  }
 
   const failureRate = Number(process.env.MOCK_PAYMENT_FAILURE_RATE) || 0;
   if (simulateFailure || Math.random() < failureRate) {
@@ -180,9 +177,31 @@ export async function mockPayment(req, res) {
     if (winner) return res.status(200).json({ booking: winner, payment: { status: 'success' } });
     throw err;
   }
+
+  // The redemption counts only now. If someone else took the last one, nothing is charged.
+  if (draft.offer && !(await claimRedemption(draft.offer.offerId))) {
+    await releaseInventory(draft);
+    const requote = await quoteBooking(input, { userId });
+    return priceChanged(res, amount, requote, `The ${draft.offer.code || draft.offer.title} offer has just been used up.`);
+  }
+
+  const { airlineCode, ...fields } = draft;
+  const bookingId = new mongoose.Types.ObjectId();
+  if (draft.type === 'flight') {
+    fields.pnr = generatePnr();
+    fields.travellers = fields.travellers.map((t, i) => ({ ...t, ticketNumber: ticketNumber(airlineCode, bookingId, i) }));
+  }
   let booking;
   try {
-    booking = await Booking.create({ ...draft, userId, idempotencyKey, bookingReference: generateReference() });
+    booking = await Booking.create({
+      ...fields,
+      _id: bookingId,
+      userId,
+      idempotencyKey,
+      contact: input.contact,
+      specialRequest: input.specialRequest ? { text: input.specialRequest } : undefined,
+      bookingReference: generateReference(),
+    });
   } catch (err) {
     await releaseInventory(draft);
     if (err.code === 11000 && err.keyPattern?.idempotencyKey) {
@@ -192,22 +211,18 @@ export async function mockPayment(req, res) {
     throw err;
   }
 
-  const payment = await Payment.create({
-    userId,
-    bookingId: booking._id,
-    amount,
-    method,
-    status: 'success',
-    transactionId: generateTransactionId(),
-  });
+  const payment = await Payment.create({ userId, bookingId: booking._id, amount, method, status: 'success', transactionId: generateTransactionId() });
   booking.paymentId = payment._id;
   await booking.save();
 
+  if (saveTravellers) await saveTravellersFor(req.user, input.type === 'flight' ? input.travellers : input.guests.map((g) => ({ ...g, ageCategory: 'adult' })));
+
+  const offerLine = booking.offer ? ` · ${booking.offer.title} −${formatInr(booking.offer.amount)} (${booking.offer.funder === 'platform' ? 'Atlas-funded' : 'your offer'})` : '';
   await notifySupplier(booking.supplierId, {
     type: 'booking.new',
     title: `New ${booking.type === 'flight' ? 'booking' : 'reservation'} ${booking.bookingReference}`,
-    body: `${booking.itemSummary.title} · ${booking.itemSummary.subtitle} · ${formatInr(booking.fareBreakdown.total)}`,
-    link: booking.type === 'flight' ? '/supplier/departures' : '/supplier/hotel',
+    body: `${booking.itemSummary.title} · ${booking.itemSummary.subtitle} · ${formatInr(booking.fareBreakdown.total)}${offerLine}${booking.specialRequest?.text ? ' · has a special request' : ''}`,
+    link: booking.type === 'flight' ? `/supplier/departures/${booking.itemId}` : '/supplier/reservations',
   });
   await notifyUser(userId, {
     type: 'booking.confirmed',

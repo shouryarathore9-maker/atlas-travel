@@ -30,9 +30,10 @@ const QUERY_OPS = [
 const same = (a, b) => String(a ?? null) === String(b ?? null);
 
 export function sandboxScope(schema) {
+  const T = schema.options.typeKey || 'type'; // some schemas use '$type'
   schema.add({
-    sandboxId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
-    sandboxExpiresAt: { type: Date, default: null },
+    sandboxId: { [T]: mongoose.Schema.Types.ObjectId, default: null, index: true },
+    sandboxExpiresAt: { [T]: Date, default: null },
   });
   // Backstop: sandbox documents expire on their own even if every cleanup path fails.
   schema.index(

@@ -1,16 +1,13 @@
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import Review from '../models/Review.js';
-import { app, createFlight, createHotel, futureDate } from './helpers.js';
+import { app, createFlight, createHotel, flatAirlineCard, futureDate, testAirline } from './helpers.js';
 
 describe('flight search', () => {
   it('returns matching flights sorted by price by default', async () => {
     const base = await createFlight();
-    await createFlight({
-      flightNumber: 'AI 101',
-      airline: 'Air India',
-      fareOptions: [{ type: 'Saver', price: 4000, cancellationPolicy: { freeUntilHoursBeforeDeparture: 0, feeAfterCutoff: 3000 }, seatsAvailable: 5 }],
-    });
+    const airIndia = await testAirline({ name: 'Air India', code: 'AI', rateCard: flatAirlineCard(4000) });
+    await createFlight({ flightNumber: 'AI 101', airline: 'Air India', supplierId: airIndia._id });
     const res = await request(app)
       .get('/api/flights')
       .query({ origin: 'DEL', destination: 'BOM', date: futureDate(10) })
@@ -69,7 +66,8 @@ describe('hotel search', () => {
     await createHotel({ name: 'Loved Three', starRating: 3, rating: { average: 4.8, count: 7 } });
     const res = await request(app).get('/api/hotels/featured').expect(200);
     expect(res.body.results.map((h) => h.name)).toEqual(['Top Five', 'Good Four']);
-    expect(res.body.results[0]).toMatchObject({ price: 6000, photo: null });
+    // "From" = tonight's cheapest room and rate plan (non-refundable is ×0.9)
+    expect(res.body.results[0]).toMatchObject({ price: 5400, photo: null });
   });
 
   it('rejects an invalid featured limit', async () => {

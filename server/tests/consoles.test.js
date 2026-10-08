@@ -8,7 +8,7 @@ import Flight from '../models/Flight.js';
 import Hotel from '../models/Hotel.js';
 import Service from '../models/Service.js';
 import { addDays, todayIstString } from '../utils/dates.js';
-import { app, createService, loggedInAgent, serviceInput, supplierWithManager } from './helpers.js';
+import { app, createFlight, createService, loggedInAgent, serviceInput, supplierWithManager } from './helpers.js';
 
 describe('console access control', () => {
   it('rejects anonymous users with 401 and the wrong roles with 403', async () => {
@@ -83,7 +83,7 @@ describe('airline manager: services and departures', () => {
   it('blocks deleting a service that has bookings', async () => {
     const { supplier, agent } = await supplierWithManager('airline');
     const service = await createService({ supplierId: supplier._id });
-    const flight = await Flight.create({ ...(await import('./helpers.js')).flightFixture(), serviceId: service._id, supplierId: supplier._id, date: todayIstString() });
+    const flight = await createFlight({ serviceId: service._id, supplierId: supplier._id, date: todayIstString() });
     await Booking.create({ userId: flight._id, type: 'flight', itemId: flight._id, bookingReference: 'ATTEST01' });
     const res = await agent.delete(`/api/supplier/services/${service._id}`).expect(409);
     expect(res.body.error.code).toBe('HAS_BOOKINGS');
@@ -135,7 +135,7 @@ describe('hotel manager: property and rooms', () => {
     bedType: 'King bed',
     amenities: ['Minibar'],
     breakfastIncluded: true,
-    price: 6000,
+    baseRate: 6000,
     taxesAndFees: 720,
     roomsTotal: 2,
     salesStopped: false,

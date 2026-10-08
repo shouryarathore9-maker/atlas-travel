@@ -12,16 +12,16 @@ import { runDailyJob, returnHotelRooms } from '../services/dailyJob.js';
 import { materialiseDepartures } from '../services/schedule.js';
 import { addDays, todayIstString } from '../utils/dates.js';
 import { runWithContext } from '../utils/context.js';
-import { app, createHotel, createService, flightFixture, loggedInAgent, supplierWithManager } from './helpers.js';
+import { app, createFlight, createHotel, createService, flightFixture, loggedInAgent, supplierWithManager } from './helpers.js';
 
 const contact = { email: 'a@example.com', phone: '9876543210' };
 
 describe('sandbox scope plugin', () => {
   it('keeps real requests and sandbox requests apart', async () => {
     const sandboxId = new mongoose.Types.ObjectId();
-    const real = await Hotel.create({ name: 'Real', city: 'Delhi', starRating: 4, roomTypes: [{ name: 'R', price: 1, roomsAvailable: 1 }] });
+    const real = await Hotel.create({ name: 'Real', city: 'Delhi', starRating: 4, roomTypes: [{ name: 'R', roomsAvailable: 1 }] });
     const fake = await runWithContext({ sandboxId }, () =>
-      Hotel.create({ name: 'Sandbox', city: 'Delhi', starRating: 4, roomTypes: [{ name: 'R', price: 1, roomsAvailable: 1 }] }),
+      Hotel.create({ name: 'Sandbox', city: 'Delhi', starRating: 4, roomTypes: [{ name: 'R', roomsAvailable: 1 }] }),
     );
     expect(String(fake.sandboxId)).toBe(String(sandboxId));
 
@@ -43,7 +43,7 @@ describe('sandbox scope plugin', () => {
 
   it('public search never returns sandbox data', async () => {
     const sandboxId = new mongoose.Types.ObjectId();
-    await runWithContext({ sandboxId }, () => Flight.create(flightFixture()));
+    await runWithContext({ sandboxId }, () => Flight.create(flightFixture({ supplierId: new mongoose.Types.ObjectId() })));
     const res = await request(app).get('/api/flights').query({ origin: 'DEL', destination: 'BOM', date: addDays(todayIstString(), 10) }).expect(200);
     expect(res.body.total).toBe(0);
   });
@@ -83,7 +83,7 @@ describe('notifications', () => {
       .send({
         idempotencyKey: 'notify-booking-1',
         method: 'upi',
-        booking: { type: 'hotel', itemId: String(supplier.hotelId), roomTypeName: 'Deluxe Room', rooms: 1, checkIn, checkOut: addDays(checkIn, 2), adults: 2, children: 0, guests: [{ name: 'Asha Rao', ageCategory: 'adult' }], contact },
+        booking: { type: 'hotel', itemId: String(supplier.hotelId), roomTypeName: 'Deluxe Room', rooms: 1, checkIn, checkOut: addDays(checkIn, 2), adults: 2, children: 0, guests: [{ firstName: 'Asha', lastName: 'Rao' }], contact },
       })
       .expect(201);
     expect(String(pay.body.booking.supplierId)).toBe(String(supplier._id));
@@ -100,7 +100,7 @@ describe('booking rules', () => {
   const hotelBooking = (hotel, key, checkIn = addDays(todayIstString(), 10)) => ({
     idempotencyKey: key,
     method: 'upi',
-    booking: { type: 'hotel', itemId: String(hotel._id), roomTypeName: 'Deluxe Room', rooms: 1, checkIn, checkOut: addDays(checkIn, 1), adults: 2, children: 0, guests: [{ name: 'Asha Rao', ageCategory: 'adult' }], contact },
+    booking: { type: 'hotel', itemId: String(hotel._id), roomTypeName: 'Deluxe Room', rooms: 1, checkIn, checkOut: addDays(checkIn, 1), adults: 2, children: 0, guests: [{ firstName: 'Asha', lastName: 'Rao' }], contact },
   });
 
   it('staff accounts can’t book', async () => {
@@ -113,7 +113,7 @@ describe('booking rules', () => {
   });
 
   it('caps upcoming hotel stays at 5 per account', async () => {
-    const hotel = await createHotel({ roomTypes: [{ name: 'Deluxe Room', occupancy: { adults: 2, children: 1 }, price: 5000, taxesAndFees: 600, cancellationPolicy: { freeUntilDaysBeforeCheckIn: 1, feeAfterCutoff: 5000 }, roomsAvailable: 20 }] });
+    const hotel = await createHotel({ roomTypes: [{ name: 'Deluxe Room', occupancy: { adults: 2, children: 1 }, taxesAndFees: 600, roomsAvailable: 20 }] });
     const traveller = await loggedInAgent();
     for (let i = 0; i < 5; i++) {
       const r = await traveller.post('/api/payments/mock').send(hotelBooking(hotel, `stay-key-${i}`));
@@ -141,11 +141,11 @@ describe('booking rules', () => {
   });
 
   it('a cancelled or sales-stopped departure can’t be paid for', async () => {
-    const flight = await Flight.create({ ...flightFixture(), salesStopped: true });
+    const flight = await createFlight({ salesStopped: true });
     const traveller = await loggedInAgent();
     const res = await traveller
       .post('/api/payments/mock')
-      .send({ idempotencyKey: 'stopped-1', method: 'upi', booking: { type: 'flight', itemId: String(flight._id), fareType: 'Saver', travellers: [{ name: 'Asha Rao', ageCategory: 'adult' }], contact } })
+      .send({ idempotencyKey: 'stopped-1', method: 'upi', booking: { type: 'flight', itemId: String(flight._id), fareType: 'Saver', travellers: [{ firstName: 'Asha', lastName: 'Rao', ageCategory: 'adult' }], contact } })
       .expect(400);
     expect(res.body.error.code).toBe('NOT_ON_SALE');
   });
@@ -200,8 +200,8 @@ describe('daily job', () => {
   it('prunes old unbooked departures only', async () => {
     const now = Date.now();
     const old = { departureTime: new Date(now - 3 * 86400e3), arrivalTime: new Date(now - 3 * 86400e3 + 7200e3) };
-    const unbooked = await Flight.create(flightFixture(old));
-    const booked = await Flight.create(flightFixture(old));
+    const unbooked = await createFlight(old);
+    const booked = await createFlight(old);
     await Booking.create({ userId: booked._id, type: 'flight', itemId: booked._id, bookingReference: 'ATOLD001' });
     expect((await runDailyJob({ now })).results.prune).toBe(1);
     expect(await Flight.exists({ _id: unbooked._id })).toBeNull();

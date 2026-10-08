@@ -1,9 +1,16 @@
+import mongoose from 'mongoose';
 import { z } from 'zod';
 import Hotel from '../models/Hotel.js';
 import Review from '../models/Review.js';
-import { lastBookableDate, nightsBetween, todayIstString } from '../utils/dates.js';
+import Supplier from '../models/Supplier.js';
+import { roomFits } from '../services/bookingService.js';
+import { hotelStay } from '../services/pricing.js';
+import { describeTemplate, hasFreeWindow, loadTemplates } from '../services/templates.js';
+import { addDays, lastBookableDate, nightsBetween, todayIstString } from '../utils/dates.js';
 import { HttpError } from '../utils/httpError.js';
 import { csv, dateString, optionalNumber, paginate, pagination } from '../utils/query.js';
+
+export { roomFits };
 
 export const hotelSearchSchema = z
   .object({
@@ -22,15 +29,10 @@ export const hotelSearchSchema = z
   })
   .refine((q) => q.checkOut > q.checkIn, { message: 'Check-out must be after check-in', path: ['checkOut'] });
 
-// Can `rooms` rooms of this type hold the whole party?
-export function roomFits(roomType, { adults, children, rooms }) {
-  return (
-    !roomType.salesStopped &&
-    roomType.roomsAvailable >= rooms &&
-    roomType.occupancy.adults * rooms >= adults &&
-    (roomType.occupancy.adults + roomType.occupancy.children) * rooms >= adults + children
-  );
-}
+export const hotelDetailSchema = z.object({
+  checkIn: dateString.optional(),
+  checkOut: dateString.optional(),
+});
 
 const sorters = {
   relevance: (a, b) => b.rating.average - a.rating.average || b.starRating - a.starRating,
@@ -40,6 +42,31 @@ const sorters = {
 };
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+async function suppliersFor(hotels) {
+  const suppliers = await Supplier.find({ _id: { $in: hotels.map((h) => h.supplierId).filter(Boolean) } }).lean();
+  return Object.fromEntries(suppliers.map((s) => [String(s._id), s]));
+}
+
+// Every rate plan of a room type priced for a stay (night by night, one room).
+function pricedPlans(card, room, { checkIn, checkOut, now }, templates) {
+  return (card.ratePlans || [])
+    .map((plan) => {
+      const stay = hotelStay(card, { roomTypeName: room.name, checkIn, checkOut, now, ratePlan: plan });
+      if (!stay) return null;
+      const template = templates[plan.templateKey];
+      return {
+        key: plan.key,
+        name: plan.name,
+        terms: describeTemplate(template),
+        freeCancellation: hasFreeWindow(template),
+        nights: stay.nights,
+        avgNightly: stay.avgNightly,
+        perRoom: stay.perRoom,
+      };
+    })
+    .filter(Boolean);
+}
 
 export async function searchHotels(req, res) {
   const q = req.validated.query;
@@ -60,12 +87,23 @@ export async function searchHotels(req, res) {
     });
   }
   const candidates = await Hotel.find({ city: new RegExp(`^${escapeRegex(q.city)}$`, 'i'), salesStopped: { $ne: true } }).lean();
+  const [suppliers, templates] = await Promise.all([suppliersFor(candidates), loadTemplates()]);
+  const now = Date.now();
 
   const available = candidates
     .map((hotel) => {
-      const rooms = hotel.roomTypes.filter((room) => roomFits(room, q));
-      if (!rooms.length) return null;
-      const cheapest = rooms.reduce((min, r) => (r.price < min.price ? r : min));
+      const card = suppliers[String(hotel.supplierId)]?.rateCard;
+      if (!card?.kind) return null;
+      // The cheapest room + rate plan that fits the party, as an average per night for this stay.
+      let best = null;
+      let anyFree = false;
+      for (const room of hotel.roomTypes.filter((r) => roomFits(r, q))) {
+        for (const plan of pricedPlans(card, room, { ...q, now }, templates)) {
+          if (plan.freeCancellation) anyFree = true;
+          if (!best || plan.avgNightly < best.plan.avgNightly) best = { room, plan };
+        }
+      }
+      if (!best) return null;
       return {
         _id: hotel._id,
         name: hotel.name,
@@ -75,9 +113,9 @@ export async function searchHotels(req, res) {
         amenities: hotel.amenities,
         photo: hotel.photos?.[0] || null,
         rating: hotel.rating,
-        price: cheapest.price,
-        breakfastIncluded: cheapest.breakfastIncluded,
-        freeCancellation: cheapest.cancellationPolicy?.freeUntilDaysBeforeCheckIn > 0,
+        price: best.plan.avgNightly, // average per night, before taxes
+        breakfastIncluded: best.room.breakfastIncluded,
+        freeCancellation: anyFree,
         nights,
       };
     })
@@ -104,10 +142,29 @@ export async function searchHotels(req, res) {
 }
 
 export async function getHotel(req, res) {
+  if (!mongoose.isValidObjectId(req.params.id)) throw new HttpError(404, 'We could not find that hotel.', 'NOT_FOUND');
   const hotel = await Hotel.findById(req.params.id).lean();
   if (!hotel) throw new HttpError(404, 'We could not find that hotel.', 'NOT_FOUND');
-  const reviews = await Review.find({ itemType: 'hotel', itemId: hotel._id }).sort({ createdAt: -1 }).limit(5).lean();
-  res.json({ hotel, reviews });
+  const { checkIn: inDate, checkOut: outDate } = req.validated.query;
+  const checkIn = inDate || addDays(todayIstString(), 1);
+  const checkOut = outDate && outDate > checkIn ? outDate : addDays(checkIn, 2);
+  const [supplier, templates, reviews] = await Promise.all([
+    hotel.supplierId ? Supplier.findById(hotel.supplierId).lean() : null,
+    loadTemplates(),
+    Review.find({ itemType: 'hotel', itemId: hotel._id }).sort({ createdAt: -1 }).limit(5).lean(),
+  ]);
+  const card = supplier?.rateCard?.kind ? supplier.rateCard : null;
+  const now = Date.now();
+  res.json({
+    hotel: {
+      ...hotel,
+      roomTypes: hotel.roomTypes.map((room) => ({ ...room, plans: card ? pricedPlans(card, room, { checkIn, checkOut, now }, templates) : [] })),
+    },
+    stay: { checkIn, checkOut },
+    breakfastPerGuest: card?.breakfastPerGuest || 0,
+    supplierCancellation: 'If the hotel can’t honour your reservation, you get a full refund automatically.',
+    reviews,
+  });
 }
 
 // "Best hotels" (story #19): high star rating AND high guest rating, best-rated first.
@@ -127,20 +184,31 @@ export async function listFeatured(req, res) {
     .sort({ 'rating.average': -1, starRating: -1, 'rating.count': -1, name: 1 })
     .limit(limit)
     .lean();
+  const [suppliers, templates] = await Promise.all([suppliersFor(hotels), loadTemplates()]);
+  const tonight = todayIstString();
+  const tomorrow = addDays(tonight, 1);
+  const now = Date.now();
 
   res.json({
-    results: hotels.map((h) => ({
-      _id: h._id,
-      name: h.name,
-      city: h.city,
-      address: h.address,
-      starRating: h.starRating,
-      amenities: h.amenities,
-      photo: h.photos?.[0] || null,
-      photos: h.photos || [],
-      rating: h.rating,
-      price: Math.min(...h.roomTypes.map((r) => r.price)), // "from" price per night, before taxes
-    })),
+    results: hotels.map((h) => {
+      const card = suppliers[String(h.supplierId)]?.rateCard;
+      // "From" price: tonight's price for the cheapest room and rate plan, before taxes.
+      const prices = card?.kind
+        ? h.roomTypes.flatMap((room) => pricedPlans(card, room, { checkIn: tonight, checkOut: tomorrow, now }, templates).map((p) => p.avgNightly))
+        : [];
+      return {
+        _id: h._id,
+        name: h.name,
+        city: h.city,
+        address: h.address,
+        starRating: h.starRating,
+        amenities: h.amenities,
+        photo: h.photos?.[0] || null,
+        photos: h.photos || [],
+        rating: h.rating,
+        price: prices.length ? Math.min(...prices) : null,
+      };
+    }),
   });
 }
 

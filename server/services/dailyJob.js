@@ -6,6 +6,8 @@ import Hotel from '../models/Hotel.js';
 import { acquireLock, releaseLock } from '../models/JobLock.js';
 import { sweepUnusedPhotos } from '../controllers/photoController.js';
 import { trimNotifications } from './notify.js';
+import { expireOffers } from './offers.js';
+import { closeRescheduleWindows, resumeCancellations } from './supplierCancellation.js';
 import { materialiseDepartures, pruneDepartures, WINDOW_DAYS } from './schedule.js';
 
 const LOCK = 'daily-job';
@@ -39,6 +41,9 @@ export const STEPS = [
   ['departures', ({ now }) => materialiseDepartures({ days: WINDOW_DAYS, now, maxNewDays: MAX_NEW_DAYS_PER_RUN })],
   ['prune', ({ now }) => pruneDepartures({ now })],
   ['hotelRooms', ({ now }) => returnHotelRooms({ now })],
+  ['offers', ({ now }) => expireOffers({ now })],
+  ['cancellations', () => resumeCancellations()],
+  ['rescheduleWindows', ({ now }) => closeRescheduleWindows({ now })],
   ['notifications', () => trimNotifications()],
   ['unusedPhotos', ({ now }) => sweepUnusedPhotos({ now })],
 ];

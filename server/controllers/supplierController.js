@@ -9,10 +9,11 @@ import Hotel from '../models/Hotel.js';
 import Photo, { MAX_PHOTO_BYTES, MAX_UPLOADS_PER_HOTEL } from '../models/Photo.js';
 import Review from '../models/Review.js';
 import Service from '../models/Service.js';
+import Supplier from '../models/Supplier.js';
 import { AIRCRAFT, AIRCRAFT_KEYS } from '../services/aircraft.js';
 import { audit, snapshot } from '../services/audit.js';
 import { materialiseDepartures, rebuildServiceDepartures, WINDOW_DAYS } from '../services/schedule.js';
-import { CITIES, HOTEL_AMENITIES, HOTEL_PHOTO_COUNT, MEALS, ROOM_AMENITIES } from '../seed/data.js';
+import { CITIES, HOTEL_AMENITIES, HOTEL_PHOTO_COUNT, ROOM_AMENITIES } from '../seed/data.js';
 import { distanceKm } from '../seed/generate.js';
 import { addDays, DAY_MS, todayIstString } from '../utils/dates.js';
 import { HttpError } from '../utils/httpError.js';
@@ -119,7 +120,6 @@ function toServiceDoc(input, supplier) {
   const origin = cityByCode[input.origin];
   const destination = cityByCode[input.destination];
   const [h, m] = input.departureTime.split(':').map(Number);
-  const km = distanceKm(origin, destination);
   return {
     flightNumber: input.flightNumber,
     origin: { code: origin.code, city: origin.city, airport: origin.airport },
@@ -131,8 +131,6 @@ function toServiceDoc(input, supplier) {
     daysOfWeek: input.daysOfWeek,
     startDate: input.startDate,
     endDate: input.endDate,
-    // Interim Phase 1 fare level until the pricing engine replaces it (Stage 2).
-    interim: { basePrice: Math.round((2200 + km * 3.6) / 50) * 50, mealOptions: MEALS.slice(0, 4) },
   };
 }
 
@@ -227,7 +225,7 @@ export async function listDepartures(req, res) {
       .sort({ departureTime: 1 })
       .skip((page - 1) * limit)
       .limit(limit)
-      .select('flightNumber origin destination departureTime arrivalTime aircraftConfig aircraftType status salesStopped fareOptions.type fareOptions.seatsAvailable date')
+      .select('flightNumber origin destination departureTime arrivalTime aircraftConfig aircraftType status salesStopped cabins scheduleChange date')
       .lean(),
     Flight.countDocuments(filter),
   ]);
@@ -275,7 +273,7 @@ async function ownHotel(req) {
 }
 
 export async function getOwnHotel(req, res) {
-  res.json({ hotel: await ownHotel(req) });
+  res.json({ hotel: await ownHotel(req), baseRates: req.supplier.rateCard?.baseRates || {} });
 }
 
 const text = (max) => z.string().trim().max(max);
@@ -286,7 +284,7 @@ const roomInput = z.object({
   bedType: text(60).min(2, 'Bed type is required'),
   amenities: z.array(z.enum(ROOM_AMENITIES)).max(ROOM_AMENITIES.length).default([]),
   breakfastIncluded: z.boolean().default(false),
-  price: z.coerce.number().int().min(500, 'At least ₹500').max(200000), // interim until the rate card (Stage 2)
+  baseRate: z.coerce.number().int().min(500, 'At least ₹500').max(200000), // written to the rate card
   taxesAndFees: z.coerce.number().int().min(0).max(50000),
   roomsTotal: z.coerce.number().int().min(0).max(500),
   salesStopped: z.boolean().default(false),
@@ -343,13 +341,17 @@ export async function updateOwnHotel(req, res) {
     // Changing the number of rooms moves the available counter by the same amount (never below 0).
     const prevTotal = prev?.roomsTotal ?? prev?.roomsAvailable ?? 0;
     const roomsAvailable = Math.max(0, (prev?.roomsAvailable ?? 0) + room.roomsTotal - (prev ? prevTotal : 0));
-    return {
-      ...room,
-      roomsAvailable,
-      cancellationPolicy: prev?.cancellationPolicy ?? { freeUntilDaysBeforeCheckIn: 1, feeAfterCutoff: room.price },
-    };
+    const { baseRate: _rate, ...rest } = room;
+    return { ...rest, roomsAvailable };
   });
   await hotel.save();
+  // Base rates live in the rate card, keyed by room type name (renames move the key).
+  const baseRates = Object.fromEntries(input.roomTypes.map((r) => [r.name, r.baseRate]));
+  const rateBefore = req.supplier.rateCard?.baseRates || {};
+  if (JSON.stringify(baseRates) !== JSON.stringify(rateBefore)) {
+    await Supplier.updateOne({ _id: req.supplierId }, { $set: { 'rateCard.baseRates': baseRates }, $inc: { 'rateCard.version': 1 } });
+    await audit(req, { action: 'rate_card.base_rates', target: { type: 'supplier', id: req.supplierId, label: hotel.name }, before: rateBefore, after: baseRates });
+  }
   await audit(req, { action: 'hotel.update', target: { type: 'hotel', id: hotel._id, label: hotel.name }, before, after: snapshot(hotel, HOTEL_AUDIT_FIELDS) });
   res.json({ hotel });
 }

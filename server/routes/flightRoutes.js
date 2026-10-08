@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { flightSearchSchema, getFlight, searchFlights } from '../controllers/flightController.js';
+import { flightDetailSchema, flightSearchSchema, getFlight, searchFlights } from '../controllers/flightController.js';
 import { validate } from '../middleware/validate.js';
 
 const router = Router();
 
 router.get('/', validate(flightSearchSchema, 'query'), searchFlights);
-router.get('/:id', getFlight);
+router.get('/:id', validate(flightDetailSchema, 'query'), getFlight);
 
 export default router;

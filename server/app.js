@@ -12,6 +12,8 @@ import adminRoutes from './routes/adminRoutes.js';
 import cronRoutes from './routes/cronRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import supplierRoutes from './routes/supplierRoutes.js';
+import meRoutes from './routes/meRoutes.js';
+import offerRoutes from './routes/offerRoutes.js';
 import { requestContext } from './utils/context.js';
 import { servePhoto } from './controllers/photoController.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
@@ -46,6 +48,8 @@ export function createApp() {
   app.use('/api/bookings', bookingRoutes);
   app.use('/api/payments', paymentRoutes);
   app.use('/api/notifications', notificationRoutes);
+  app.use('/api/me', meRoutes);
+  app.use('/api/offers', offerRoutes);
   app.use('/api/supplier', supplierRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/cron', cronRoutes);

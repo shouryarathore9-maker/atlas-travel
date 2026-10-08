@@ -9,6 +9,11 @@ import bcrypt from 'bcryptjs';
 import mongoose from 'mongoose';
 import { connectDb } from '../config/db.js';
 import AuditLog from '../models/AuditLog.js';
+import CancellationTemplate from '../models/CancellationTemplate.js';
+import Config, { DEFAULT_COMMISSION_RATE } from '../models/Config.js';
+import Offer from '../models/Offer.js';
+import Photo from '../models/Photo.js';
+import Ticket from '../models/Ticket.js';
 import Booking from '../models/Booking.js';
 import Flight from '../models/Flight.js';
 import Hotel from '../models/Hotel.js';
@@ -26,6 +31,8 @@ import {
   generateReviews,
   generateServices,
 } from './generate.js';
+import { generateOffers } from './offers.js';
+import { DEFAULT_TEMPLATES } from '../services/templates.js';
 
 // Admin and demo traveller passwords come only from server/.env (never committed): the same
 // Atlas cluster backs the public site, so a password written in this file would be public.
@@ -101,7 +108,9 @@ async function main() {
   const reviews = generateReviews(services, hotels); // sets service and hotel ratings first…
   const flights = generateDepartures(services, { days: SEED_DAYS }); // …so departures copy them
 
-  const models = [Supplier, Service, Flight, Hotel, Review, Booking, Payment, Notification, AuditLog];
+  const offers = generateOffers({ suppliers: [...airlineSuppliers, ...hotelSuppliers] });
+
+  const models = [Supplier, Service, Flight, Hotel, Review, Booking, Payment, Notification, AuditLog, Offer, Ticket, CancellationTemplate, Config, Photo];
   await Promise.all(models.map((Model) => Model.deleteMany({})));
   await mongoose.connection.db.dropCollection('coupons').catch(() => {}); // Phase 1 stub, replaced by offers
   await Promise.all([...models, User].map((Model) => Model.syncIndexes()));
@@ -111,6 +120,9 @@ async function main() {
   await insertInChunks(Flight, flights);
   await insertInChunks(Hotel, hotels);
   await insertInChunks(Review, reviews, 1000);
+  await insertInChunks(Offer, offers);
+  await CancellationTemplate.insertMany(DEFAULT_TEMPLATES);
+  await Config.create({ key: 'commissionRate', value: DEFAULT_COMMISSION_RATE });
 
   for (const { password, ...user } of DEMO_USERS) {
     await User.updateOne({ email: user.email }, { $set: { ...user, passwordHash: await bcrypt.hash(password, 10) } }, { upsert: true });
@@ -137,7 +149,7 @@ async function main() {
 
   console.log(
     `Seeded ${airlineSuppliers.length + hotelSuppliers.length} suppliers, ${services.length} services, ` +
-      `${flights.length} departures (${SEED_DAYS} days), ${hotels.length} hotels, ${reviews.length} reviews.`,
+      `${flights.length} departures (${SEED_DAYS} days), ${hotels.length} hotels, ${reviews.length} reviews, ${offers.length} offers.`,
   );
   console.log(`Accounts: ${DEMO_USERS.map((u) => `${u.email} (${u.role})`).join(', ')} — passwords are the SEED_* values in server/.env`);
   console.log(`${managers.length} manager accounts — passwords in server/manager-credentials.local.md (git-ignored)`);

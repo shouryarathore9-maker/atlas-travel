@@ -13,7 +13,8 @@ const userSchema = new mongoose.Schema(
     countryCode: { type: String, default: '+91' },
     role: { type: String, enum: ROLES, default: 'traveler' },
     supplierId: { type: mongoose.Schema.Types.ObjectId, ref: 'Supplier', default: null }, // managers only
-    savedTravellers: [{ _id: false, name: String, ageCategory: String }],
+    // Up to 20 people the traveller books for (prd.md → Saved travellers).
+    savedTravellers: [{ firstName: String, lastName: String, ageCategory: { type: String, enum: ['adult', 'child', 'infant'] } }],
   },
   { timestamps: { createdAt: true, updatedAt: false } },
 );
