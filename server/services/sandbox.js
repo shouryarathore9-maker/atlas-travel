@@ -23,9 +23,12 @@ import Supplier from '../models/Supplier.js';
 import Ticket from '../models/Ticket.js';
 import User from '../models/User.js';
 import { currentContext, runWithContext } from '../utils/context.js';
-import { todayIstString } from '../utils/dates.js';
+import { addDays, todayIstString } from '../utils/dates.js';
+import { createRng } from '../seed/generate.js';
+import { generateHistory } from '../seed/history.js';
+import { bookingLine, istPeriod, periodLabel, periodStart, shiftPeriod, totalsOf } from './settlement.js';
+import { DEFAULT_TEMPLATES } from './templates.js';
 import { HttpError } from '../utils/httpError.js';
-import { generateReference } from './bookingService.js';
 
 // Every model that carries sandbox documents (the ones using the sandboxScope plugin).
 const ORPHAN_GRACE_MS = 10 * 60 * 1000;
@@ -55,11 +58,7 @@ export async function sandboxOptions() {
 
 // ---------- Reading the real slice (in the real-data context) ----------
 
-// Demos are public, so only seeded (synthetic) bookings are copied — never a real traveller's
-// names, requests or tickets. Statement lines carry no personal data (references and amounts).
-const SEEDED_ONLY = { isSynthetic: true };
-
-async function airlineSlice(supplierId, { bookings = 40 } = {}) {
+async function airlineSlice(supplierId) {
   const supplier = await Supplier.findOne({ _id: supplierId, kind: 'airline', status: { $ne: 'suspended' } }).lean();
   if (!supplier) throw new HttpError(404, 'Choose one of the airlines.', 'NOT_FOUND');
   const now = new Date();
@@ -67,30 +66,101 @@ async function airlineSlice(supplierId, { bookings = 40 } = {}) {
     Service.find({ supplierId }).lean(),
     Flight.find({ supplierId, status: 'scheduled', departureTime: { $gte: now, $lt: new Date(now.getTime() + SANDBOX_DAYS * 864e5) } }).lean(),
   ]);
-  const flightIds = flights.map((f) => f._id);
-  const upcoming = await Booking.find({ ...SEEDED_ONLY, supplierId, itemId: { $in: flightIds } }).sort({ createdAt: -1 }).limit(Math.ceil(bookings / 2)).lean();
-  const past = await Booking.find({ ...SEEDED_ONLY, supplierId, _id: { $nin: upcoming.map((b) => b._id) } }).sort({ createdAt: -1 }).limit(bookings - upcoming.length).lean();
-  return { suppliers: [supplier], services, flights, hotels: [], bookings: [...upcoming, ...past] };
+  return { suppliers: [supplier], services, flights, hotels: [] };
 }
 
-async function hotelSlice(supplierId, { bookings = 40 } = {}) {
+async function hotelSlice(supplierId) {
   const supplier = await Supplier.findOne({ _id: supplierId, kind: 'hotel', status: { $ne: 'suspended' } }).lean();
   const hotel = supplier && (await Hotel.findById(supplier.hotelId).lean());
   if (!hotel || hotel.starRating < FEATURED_MIN_STARS || hotel.rating.average < FEATURED_MIN_RATING) throw new HttpError(404, 'Choose one of the listed hotels.', 'NOT_FOUND');
-  const upcoming = await Booking.find({ ...SEEDED_ONLY, supplierId, 'travelDates.end': { $gt: new Date() } }).sort({ createdAt: -1 }).limit(Math.ceil(bookings / 2)).lean();
-  const past = await Booking.find({ ...SEEDED_ONLY, supplierId, _id: { $nin: upcoming.map((b) => b._id) } }).sort({ createdAt: -1 }).limit(bookings - upcoming.length).lean();
-  return { suppliers: [supplier], services: [], flights: [], hotels: [hotel], bookings: [...upcoming, ...past] };
+  return { suppliers: [supplier], services: [], flights: [], hotels: [hotel] };
 }
 
 async function readSlice(kind, supplierId) {
   if (kind === 'airline') return airlineSlice(supplierId);
   if (kind === 'hotel') return hotelSlice(supplierId);
-  // Admin: IndiGo's slice and the best-rated hotel, 20 bookings each.
+  // Admin: the alphabetically first active airline and the best-rated hotel.
   const airline = await Supplier.findOne({ kind: 'airline', status: { $ne: 'suspended' } }).sort({ name: 1 }).lean();
   const best = (await sandboxOptions()).hotels[0];
   if (!airline || !best) throw new HttpError(503, 'The demo isn’t ready yet. Please try again later.', 'DEMO_UNAVAILABLE');
-  const [a, h] = await Promise.all([airlineSlice(airline._id, { bookings: 20 }), hotelSlice(best.supplierId, { bookings: 20 })]);
-  return { suppliers: [...a.suppliers, ...h.suppliers], services: a.services, flights: a.flights, hotels: h.hotels, bookings: [...a.bookings, ...h.bookings] };
+  const [a, h] = await Promise.all([airlineSlice(airline._id), hotelSlice(best.supplierId)]);
+  return { suppliers: [...a.suppliers, ...h.suppliers], services: a.services, flights: a.flights, hotels: h.hotels };
+}
+
+// The supplier's own offer, for a demo of a supplier that has none (so its Offers page isn't empty).
+function demoOffer(supplier, today) {
+  const airline = supplier.kind === 'airline';
+  return {
+    _id: newId(),
+    slug: `${supplier.slug}-demo-deal`,
+    code: airline ? `DEMO${(supplier.code || 'AIR').replace(/[^A-Z0-9]/g, '')}` : 'DEMOSTAY',
+    title: `${supplier.name} demo deal`,
+    summary: '8% off, up to ₹1,000',
+    description: `Funded by ${supplier.name}: 8% off the ${airline ? 'base fare' : 'room charges'}, up to ₹1,000.`,
+    image: airline ? '/images/seed/offers/plane-sky.jpg' : '/images/seed/offers/room-keys.jpg',
+    funder: 'supplier',
+    supplierId: supplier._id,
+    supplierName: supplier.name,
+    auto: false,
+    scope: airline ? 'flights' : 'hotels',
+    discountType: 'percent',
+    value: 8,
+    maxDiscount: 1000,
+    minSpend: 2000,
+    redemptionLimit: null,
+    redemptions: 0,
+    firstBookingsOnly: false,
+    validFrom: addDays(today, -70),
+    validTo: addDays(today, 30),
+    status: 'active',
+  };
+}
+
+const REQUESTS = {
+  flight: ['Travelling with my grandmother — could we sit together near the front?', 'Could you note a wheelchair at the gate, please?'],
+  hotel: ['Could we have a quiet room away from the lift?', 'We arrive around midnight — please hold the room.'],
+};
+
+// Statements for the last two closed months, built from the demo's own bookings exactly as the
+// monthly job would (the older one already paid).
+function demoStatements(bookings, suppliers, rate, now) {
+  const statements = [];
+  const latest = shiftPeriod(istPeriod(now), -1);
+  for (const period of [shiftPeriod(latest, -1), latest]) {
+    const start = periodStart(period);
+    const end = periodStart(shiftPeriod(period, 1));
+    for (const supplier of suppliers) {
+      const due = bookings.filter((b) => {
+        if (String(b.supplierId) !== String(supplier._id) || b.settlement) return false;
+        const when = b.status === 'confirmed' ? b.travelDates.end : b.cancellation?.cancelledAt;
+        return when && new Date(when) >= start && new Date(when) < end;
+      });
+      const lines = due.map((b) => ({ b, line: bookingLine(b, rate) })).filter((x) => x.line);
+      if (!lines.length) continue;
+      const _id = newId();
+      lines.forEach(({ b }) => {
+        b.settlement = { statementId: _id, period };
+      });
+      const list = lines.map((x) => x.line).sort((x, y) => new Date(x.date) - new Date(y.date));
+      const createdAt = new Date(end.getTime() + 2 * 3600e3);
+      const paid = period !== latest;
+      statements.push({
+        _id,
+        supplierId: supplier._id,
+        period,
+        commissionRate: rate,
+        lines: list,
+        totals: totalsOf(list),
+        status: paid ? 'paid' : 'ready',
+        paidAt: paid ? new Date(createdAt.getTime() + 6 * 864e5) : null,
+        paymentRef: paid ? `ATLPAY-${period.replace('-', '')}-DEMO` : null,
+        paidBy: paid ? 'Atlas Admin' : null,
+        isSynthetic: true,
+        createdAt,
+      });
+    }
+  }
+  return statements;
 }
 
 // ---------- Creating ----------
@@ -106,17 +176,14 @@ export async function createSandbox({ kind, supplierId, ip, now = Date.now() }) 
   if (active >= SANDBOX_LIMITS.active) throw new HttpError(503, 'The demo is busy — please try again in a few minutes.', 'DEMO_BUSY');
 
   const slice = await readSlice(kind, supplierId);
+  const today = todayIstString(now);
   const [templates, configs, platformOffers] = await Promise.all([
     CancellationTemplate.find({}).lean(),
     Config.find({}).lean(),
-    Offer.find({ funder: 'platform', status: 'active', code: { $ne: null }, validTo: { $gte: todayIstString(now) } }).sort({ validTo: 1 }).limit(2).lean(),
+    Offer.find({ funder: 'platform', status: 'active', code: { $ne: null }, validTo: { $gte: today } }).sort({ validTo: 1 }).limit(2).lean(),
   ]);
   const realSupplierIds = slice.suppliers.map((s) => s._id);
-  const [ownOffers, statements, payments] = await Promise.all([
-    Offer.find({ supplierId: { $in: realSupplierIds }, status: 'active' }).limit(2).lean(),
-    Statement.find({ supplierId: { $in: realSupplierIds } }).sort({ period: -1 }).limit(kind === 'admin' ? 4 : 2).lean(),
-    Payment.find({ bookingId: { $in: slice.bookings.map((b) => b._id) } }).lean(),
-  ]);
+  const ownOffers = await Offer.find({ supplierId: { $in: realSupplierIds }, status: 'active' }).limit(2).lean();
 
   // New ids for everything; references are remapped so the copy is self-contained.
   const map = new Map();
@@ -134,49 +201,101 @@ export async function createSandbox({ kind, supplierId, ip, now = Date.now() }) 
   });
   const services = slice.services.map((s) => ({ ...strip(s), _id: id(s._id), supplierId: id(s.supplierId) }));
   const flights = slice.flights.map((f) => ({ ...strip(f), _id: id(f._id), supplierId: id(f.supplierId), serviceId: mapped(f.serviceId) }));
-  const offers = [...ownOffers, ...platformOffers].slice(0, 2).map((o) => ({ ...strip(o), _id: id(o._id), supplierId: o.supplierId ? id(o.supplierId) : null }));
+  const offers = [...ownOffers, ...platformOffers].slice(0, 2).map((o) => ({ ...strip(o), _id: id(o._id), supplierId: o.supplierId ? id(o.supplierId) : null, redemptions: 0 }));
+  for (const s of suppliers) if (!offers.some((o) => String(o.supplierId) === String(s._id))) offers.push(demoOffer(s, today));
 
   const sandboxId = newId();
   const expiresAt = new Date(now + SANDBOX_MAX_MS);
-  const guest = { _id: newId(), name: 'Demo guests', email: `guests-${sandboxId}@sandbox.atlas.invalid`, role: 'traveler', passwordHash: unusablePassword() };
+  const tag = String(sandboxId).slice(-12); // short, still unique, for the demo accounts' addresses
+  const guest = { _id: newId(), name: 'Demo guests', email: `guests.${tag}@sandbox.atlas.invalid`, role: 'traveler', passwordHash: unusablePassword() };
   const primarySupplier = suppliers[0];
   const manager =
     kind === 'admin'
-      ? { _id: newId(), name: 'Demo Admin', email: `admin-${sandboxId}@sandbox.atlas.invalid`, role: 'admin', passwordHash: unusablePassword() }
+      ? { _id: newId(), name: 'Demo Admin', email: `admin.${tag}@sandbox.atlas.invalid`, role: 'admin', passwordHash: unusablePassword() }
       : {
           _id: newId(),
           name: `${primarySupplier.name} demo manager`,
-          email: `manager-${sandboxId}@sandbox.atlas.invalid`,
+          email: `manager.${tag}@sandbox.atlas.invalid`,
           role: kind === 'airline' ? 'airline_manager' : 'hotel_manager',
           supplierId: primarySupplier._id,
           passwordHash: unusablePassword(),
         };
-  const traveller = kind === 'admin' ? null : { _id: newId(), name: 'Demo Traveller', email: `traveller-${sandboxId}@sandbox.atlas.invalid`, role: 'traveler', phone: '9000000000', passwordHash: unusablePassword() };
+  const traveller =
+    kind === 'admin'
+      ? null
+      : {
+          _id: newId(),
+          name: 'Demo Traveller',
+          email: `traveller.${tag}@sandbox.atlas.invalid`,
+          role: 'traveler',
+          phone: '9000000000',
+          passwordHash: unusablePassword(),
+          savedTravellers: [
+            { firstName: 'Asha', lastName: 'Traveller', ageCategory: 'adult' },
+            { firstName: 'Kabir', lastName: 'Traveller', ageCategory: 'child' },
+          ],
+        };
 
-  const bookings = slice.bookings.map((b) => ({
-    ...strip(b),
-    _id: id(b._id),
-    userId: guest._id,
-    supplierId: mapped(b.supplierId),
-    itemId: mapped(b.itemId),
-    bookingReference: generateReference(),
-    contact: { email: guest.email, phone: '9000000000' },
-    offer: b.offer ? { ...b.offer, offerId: mapped(b.offer.offerId), supplierId: mapped(b.offer.supplierId) } : null,
-    paymentId: b.paymentId ? id(b.paymentId) : undefined,
-    settlement: null,
-    idempotencyKey: undefined,
-  }));
-  const refOf = Object.fromEntries(slice.bookings.map((b, i) => [b.bookingReference, bookings[i].bookingReference]));
-  const copiedPayments = payments.map((p) => ({ ...strip(p), _id: id(p._id), bookingId: mapped(p.bookingId), userId: guest._id }));
-  const copiedStatements = statements.map((s) => ({
-    ...strip(s),
-    _id: id(s._id),
-    supplierId: mapped(s.supplierId),
-    lines: s.lines.map((l) => ({ ...l, bookingId: mapped(l.bookingId), bookingReference: refOf[l.bookingReference] || l.bookingReference })),
-  }));
+  // The demo's own bookings, made by the same generator as the seed's history, on the copied
+  // inventory: ~60 days of past trips plus bookings already made for upcoming departures/stays
+  // (on seats the departure counts as sold; upcoming stays take rooms off the copy's counters).
+  // Nothing real is ever copied, so no real traveller's details can reach a public demo.
+  const rng = createRng(parseInt(String(sandboxId).slice(-8), 16));
+  const templatesByKey = Object.fromEntries([...DEFAULT_TEMPLATES, ...templates].map((t) => [t.key, t]));
+  const generate = (window) =>
+    generateHistory({
+      airlineSuppliers: suppliers.filter((s) => s.kind === 'airline'),
+      hotelSuppliers: suppliers.filter((s) => s.kind === 'hotel'),
+      services,
+      hotels,
+      offers,
+      templates: templatesByKey,
+      flights,
+      today,
+      now,
+      rng,
+      users: [guest],
+      ...window,
+    });
+  const past = generate({ historyDays: 62, futureDays: 0, rate: kind === 'admin' ? 0.2 : 0.16 });
+  const upcoming = generate({ historyDays: -1, futureDays: kind === 'airline' ? SANDBOX_DAYS : 30, rate: kind === 'admin' ? 0.9 : 1.2 });
+  const bookings = [...past.bookings, ...upcoming.bookings];
+  // Readable contact details for the demo's guests (the account's own address is a long internal one).
+  bookings.forEach((b, i) => {
+    b.contact = { email: `guest${i + 1}@example.com`, phone: '9000000000' };
+  });
+  const payments = [...past.payments, ...upcoming.payments];
+  for (const { hotelId, roomTypeName, rooms } of upcoming.roomChanges) {
+    const room = hotels.find((h) => String(h._id) === String(hotelId))?.roomTypes.find((r) => r.name === roomTypeName);
+    if (room) room.roomsAvailable -= rooms;
+  }
+  for (const o of offers) o.redemptions += (past.offerUse[String(o._id)] || 0) + (upcoming.offerUse[String(o._id)] || 0);
+
+  // Special requests: one waiting for the supplier's reply (an upcoming trip) and answered ones.
+  const isUpcoming = (b) => b.status === 'confirmed' && new Date(b.travelDates.end) > new Date(now);
+  const waiting = bookings.find((b) => isUpcoming(b) && !b.specialRequest);
+  if (waiting) waiting.specialRequest = { text: REQUESTS[waiting.type][0] };
+  if (!bookings.some((b) => b.specialRequest?.reply)) {
+    const answered = bookings.find((b) => !isUpcoming(b) && b.status === 'confirmed' && !b.specialRequest);
+    if (answered) answered.specialRequest = { text: REQUESTS[answered.type][1], reply: { status: 'accepted', comment: 'Noted — all arranged.', at: new Date(answered.createdAt.getTime() + 5 * 3600e3), by: primarySupplier.name } };
+  }
+  // The demo traveller starts with one upcoming and one past trip of the demo supplier.
+  if (traveller) {
+    const mine = [bookings.find((b) => isUpcoming(b) && b !== waiting), bookings.find((b) => b.status === 'confirmed' && !isUpcoming(b))].filter(Boolean);
+    for (const b of mine) {
+      b.userId = traveller._id;
+      b.contact = { email: 'demo.traveller@example.com', phone: traveller.phone };
+      b.travellers = b.travellers.map((t, i) => (i === 0 ? { ...t, firstName: 'Demo', lastName: 'Traveller', name: 'Demo Traveller' } : t));
+      const payment = payments.find((p) => String(p._id) === String(b.paymentId));
+      if (payment) payment.userId = traveller._id;
+    }
+  }
+  const commission = configs.find((c) => c.key === 'commissionRate')?.value ?? 0.1;
+  const statements = demoStatements(bookings, suppliers, commission, now);
 
   // Three tickets in different states, and a few notifications, so the consoles aren't empty.
   const t0 = new Date(now - 26 * 3600e3);
+  const guestBookings = bookings.filter((b) => String(b.userId) === String(guest._id) && b.status === 'confirmed');
   const ticketOn = (b, status, messages) => ({
     _id: newId(),
     type: 'booking_problem',
@@ -191,48 +310,72 @@ export async function createSandbox({ kind, supplierId, ip, now = Date.now() }) 
     updatedAt: new Date(now - 3 * 3600e3),
   });
   const tickets = [];
-  if (bookings[0]) {
+  if (guestBookings[0]) {
     tickets.push(
-      ticketOn(bookings[0], 'escalated', [
+      ticketOn(guestBookings[0], 'escalated', [
         { authorRole: 'traveller', authorName: 'Demo guest', body: 'Could you confirm my booking went through? I haven’t had an email.', at: t0 },
         { authorRole: 'admin', authorName: 'Atlas support', body: 'Asking the supplier to confirm for you.', at: new Date(now - 20 * 3600e3) },
       ]),
     );
   }
-  if (bookings[1]) {
+  if (guestBookings[1]) {
     tickets.push(
-      ticketOn(bookings[1], kind === 'admin' ? 'open' : 'answered', [
+      ticketOn(guestBookings[1], kind === 'admin' ? 'open' : 'answered', [
         { authorRole: 'traveller', authorName: 'Demo guest', body: 'Is it possible to change the name spelling on my booking?', at: t0 },
         ...(kind === 'admin' ? [] : [{ authorRole: 'supplier', authorName: primarySupplier.name, body: 'Yes — we have corrected it on our side.', at: new Date(now - 5 * 3600e3) }]),
       ]),
     );
   }
-  const queried = copiedStatements[0]?.lines.find((l) => l.kind === 'completed');
+  const queriedStatement = [...statements].reverse().find((st) => st.lines.some((l) => l.kind === 'completed'));
+  const queried = queriedStatement?.lines.find((l) => l.kind === 'completed');
   if (queried) {
     tickets.push({
       _id: newId(),
       type: 'statement_query',
       bookingId: queried.bookingId,
       bookingReference: queried.bookingReference,
-      supplierId: copiedStatements[0].supplierId,
-      statementId: copiedStatements[0]._id,
-      subject: `${copiedStatements[0].period} statement · ${queried.bookingReference}`,
+      supplierId: queriedStatement.supplierId,
+      statementId: queriedStatement._id,
+      subject: `${periodLabel(queriedStatement.period)} statement · ${queried.bookingReference}`,
       status: 'open',
-      messages: [{ authorRole: 'supplier', authorName: 'Manager', body: 'The seat fee on this line was refunded at the desk — could you check?', at: t0 }],
+      messages: [{ authorRole: 'supplier', authorName: 'Manager', body: 'A charge on this line was refunded at the desk — could you check?', at: t0 }],
       createdAt: t0,
       updatedAt: t0,
     });
   }
   const notifyTo = manager._id;
   const consoleBase = kind === 'admin' ? '/admin' : '/supplier';
+  const latestStatement = statements.find((st) => st.status === 'ready') || statements[0];
   const notifications = [
     { userId: notifyTo, type: 'demo.welcome', title: 'Welcome to your demo', body: 'Everything here is a private copy. Try changing prices, offers or a booking.', link: consoleBase, createdAt: new Date(now - 60e3) },
-    ...(copiedStatements[0] ? [{ userId: notifyTo, type: 'statement.ready', title: 'A statement is ready', link: `${consoleBase}/${kind === 'admin' ? 'settlement' : 'statements'}/${copiedStatements[0]._id}`, createdAt: new Date(now - 2 * 3600e3) }] : []),
+    ...(latestStatement ? [{ userId: notifyTo, type: 'statement.ready', title: `Your ${periodLabel(latestStatement.period)} statement is ready`, link: `${consoleBase}/${kind === 'admin' ? 'settlement' : 'statements'}/${latestStatement._id}`, createdAt: new Date(now - 2 * 3600e3) }] : []),
     ...(tickets[0] ? [{ userId: notifyTo, type: 'ticket.escalated', title: `Ticket ${kind === 'admin' ? 'waiting' : 'escalated to you'} · ${tickets[0].bookingReference}`, link: `${consoleBase}/tickets/${tickets[0]._id}`, createdAt: new Date(now - 20 * 3600e3) }] : []),
+    ...(waiting && kind !== 'admin' ? [{ userId: notifyTo, type: 'special_request.new', title: `Special request · ${waiting.bookingReference}`, body: waiting.specialRequest.text, link: '/supplier/requests', createdAt: new Date(now - 4 * 3600e3) }] : []),
+    ...(traveller
+      ? bookings
+          .filter((b) => String(b.userId) === String(traveller._id))
+          .map((b) => ({ userId: traveller._id, type: 'booking.confirmed', title: `Booking confirmed · ${b.bookingReference}`, link: `/bookings/${b.bookingReference}/confirmation`, createdAt: b.createdAt }))
+      : []),
   ];
 
+  // A few audit entries, as if the manager (or admin) had already been at work.
+  const actor = { actorId: manager._id, actorName: manager.name, actorRole: manager.role };
+  const auditAt = (h) => new Date(now - h * 3600e3);
+  const audits =
+    kind === 'admin'
+      ? [
+          { ...actor, action: 'commission.update', target: { type: 'config', label: 'commissionRate' }, before: { rate: 0.1 }, after: { rate: commission }, at: auditAt(70) },
+          { ...actor, action: 'ticket.escalate', target: { type: 'ticket', id: tickets[0]?._id, label: `Ticket ${tickets[0]?.bookingReference || ''}` }, at: auditAt(20) },
+          ...statements.filter((st) => st.status === 'paid').map((st) => ({ ...actor, action: 'statement.mark_paid', supplierId: st.supplierId, target: { type: 'statement', id: st._id, label: periodLabel(st.period) }, before: { status: 'ready' }, after: { status: 'paid', paymentRef: st.paymentRef }, at: st.paidAt })),
+        ]
+      : [
+          { ...actor, supplierId: primarySupplier._id, action: 'rate_card.update', target: { type: 'supplier', id: primarySupplier._id, label: primarySupplier.name }, at: auditAt(50) },
+          ...offers.filter((o) => String(o.supplierId) === String(primarySupplier._id)).map((o) => ({ ...actor, supplierId: primarySupplier._id, action: 'offer.create', target: { type: 'offer', id: o._id, label: o.title }, at: auditAt(30) })),
+          ...(tickets[1] ? [{ ...actor, supplierId: primarySupplier._id, action: 'ticket.supplier_reply', target: { type: 'ticket', id: tickets[1]._id, label: `Ticket ${tickets[1].bookingReference}` }, at: auditAt(5) }] : []),
+        ];
+
   const docs =
-    suppliers.length + hotels.length + services.length + flights.length + offers.length + bookings.length + copiedPayments.length + copiedStatements.length + tickets.length + notifications.length + templates.length + configs.length + 3;
+    suppliers.length + hotels.length + services.length + flights.length + offers.length + bookings.length + payments.length + statements.length + tickets.length + notifications.length + audits.length + templates.length + configs.length + 3;
   if (docs > SANDBOX_LIMITS.docs) throw new HttpError(503, 'That demo is too large right now. Please choose another.', 'DEMO_TOO_LARGE');
 
   const sandbox = await Sandbox.create({
@@ -259,8 +402,9 @@ export async function createSandbox({ kind, supplierId, ip, now = Date.now() }) 
         insert(Flight, flights),
         insert(Offer, offers),
         insert(Booking, bookings, { timestamps: false }),
-        insert(Payment, copiedPayments),
-        insert(Statement, copiedStatements),
+        insert(Payment, payments),
+        insert(Statement, statements),
+        insert(AuditLog, audits),
         insert(Ticket, tickets),
         insert(CancellationTemplate, templates.map(strip)),
         insert(Config, configs.map(strip)),

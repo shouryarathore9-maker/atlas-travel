@@ -2520,6 +2520,9 @@
 /* ---------- Rate card editor (Phase 2) ---------- */
 .pricing-page {
   display: grid;
+  /* minmax(0, …): a wide child (the fare-tier table) scrolls inside its card instead of widening
+     the page — otherwise phones zoom the whole page out and full-width bars no longer line up. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-5);
 }
 @media (min-width: 1200px) {
@@ -2536,6 +2539,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  min-width: 0;
 }
 .pricing-main > .card + .card {
   margin-top: 0;
@@ -2610,7 +2614,13 @@
   .band-row,
   .band-row--season,
   .band-row--route {
-    grid-template-columns: 1fr 1fr;
+    /* minmax(0, …) so date inputs (wide by default) shrink to the column instead of overflowing. */
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .band-row .input,
+  .band-row .select {
+    min-width: 0;
+    width: 100%;
   }
 }
 .remove-row {

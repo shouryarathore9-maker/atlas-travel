@@ -16,13 +16,17 @@ import { createRng } from './generate.js';
 export const HISTORY_DAYS = 183;
 const FIRST = ['Aarav', 'Ananya', 'Rohan', 'Priya', 'Vikram', 'Meera', 'Arjun', 'Kavya', 'Siddharth', 'Nisha', 'Karan', 'Ishita', 'Farhan', 'Lakshmi', 'Devika', 'Kabir', 'Sana', 'Aditya', 'Neha', 'Rahul'];
 const LAST = ['Sharma', 'Iyer', 'Mehta', 'Reddy', 'Banerjee', 'Kapoor', 'Nair', 'Gupta', 'Khan', 'Desai', 'Menon', 'Joshi', 'Pillai', 'Bose', 'Rao'];
-const REQUESTS = [
-  ['Window seat together for two of us, please.', 'accepted', 'Seated together in row 14.'],
-  ['Late check-in around 11 pm.', 'accepted', 'Noted — the front desk will expect you.'],
-  ['Could we have a cot in the room for our toddler?', 'accepted', 'A cot will be ready on arrival.'],
-  ['Early check-in at 8 am if possible.', 'cannot', 'We are full the night before, sorry — luggage storage is free.'],
-];
-export const HISTORY_EMAIL_DOMAIN = 'history.atlas.invalid';
+const REQUESTS = {
+  flight: [
+    ['Window seat together for two of us, please.', 'accepted', 'Seated together in row 14.'],
+    ['Travelling with an infant — a bassinet seat if possible.', 'cannot', 'The bassinet seats are taken, sorry — we’ve seated you near the front.'],
+  ],
+  hotel: [
+    ['Late check-in around 11 pm.', 'accepted', 'Noted — the front desk will expect you.'],
+    ['Could we have a cot in the room for our toddler?', 'accepted', 'A cot will be ready on arrival.'],
+    ['Early check-in at 8 am if possible.', 'cannot', 'We are full the night before, sorry — luggage storage is free.'],
+  ],
+};export const HISTORY_EMAIL_DOMAIN = 'history.atlas.invalid';
 
 const istDate = (date) => new Date(new Date(date).getTime() + 5.5 * 3600e3).toISOString().slice(0, 10);
 
@@ -39,15 +43,32 @@ function offerOptions(offers, { day, product, supplierId }) {
 }
 
 /**
- * @returns { users, bookings, payments, dailyStats, offerUse } — plain documents ready for insertMany.
+ * @returns { users, bookings, payments, dailyStats, offerUse, roomChanges } — plain documents ready for insertMany.
+ * Visitor demos reuse this for one supplier: a shorter window (`historyDays`, `futureDays`), a lower
+ * daily `rate`, and their own `users` instead of the 80 history accounts.
  */
-export function generateHistory({ airlineSuppliers, hotelSuppliers, services, hotels, offers, templates, flights = [], today = todayIstString(), now = Date.now(), rng = createRng(97) }) {
+export function generateHistory({
+  airlineSuppliers,
+  hotelSuppliers,
+  services,
+  hotels,
+  offers,
+  templates,
+  flights = [],
+  today = todayIstString(),
+  now = Date.now(),
+  rng = createRng(97),
+  historyDays = HISTORY_DAYS,
+  futureDays = FUTURE_DAYS,
+  rate = 1,
+  users: givenUsers = null,
+}) {
   const departureOf = new Map(flights.map((f) => [`${f.serviceId}|${f.date}`, f]));
   const seatsUsed = new Map(); // departure id → seats given to synthetic bookings
   const roomsTaken = new Map(); // `${hotelId}|${room}` → rooms taken by upcoming synthetic stays
   const roomChanges = [];
   const supplierById = Object.fromEntries([...airlineSuppliers, ...hotelSuppliers].map((s) => [String(s._id), s]));
-  const users = Array.from({ length: 80 }, (_, i) => {
+  const users = givenUsers || Array.from({ length: 80 }, (_, i) => {
     const first = FIRST[i % FIRST.length];
     const last = LAST[(i * 7) % LAST.length];
     return {
@@ -65,16 +86,18 @@ export function generateHistory({ airlineSuppliers, hotelSuppliers, services, ho
   const funnel = {};
   const popularHotels = hotels.filter((h) => h.starRating >= 4).concat(hotels); // better hotels twice as likely
 
-  for (let back = HISTORY_DAYS; back >= -FUTURE_DAYS; back--) {
+  for (let back = historyDays; back >= -futureDays; back--) {
     if (back === 0) continue; // trips ending today are neither history nor clearly upcoming
     const travelDay = addDays(today, -back);
     const upcoming = back < 0;
     // A gentle upward trend, busier weekends: ~3–6 trips a day (upcoming ones only if already booked).
     const weekday = new Date(`${travelDay}T00:00:00Z`).getUTCDay();
-    const n = Math.round((3 + Math.min(HISTORY_DAYS, HISTORY_DAYS - back) / 80 + (weekday === 0 || weekday === 6 ? 1.2 : 0)) * (0.7 + rng.next() * 0.6));
+    const expected = (3 + Math.min(HISTORY_DAYS, HISTORY_DAYS - back) / 80 + (weekday === 0 || weekday === 6 ? 1.2 : 0)) * (0.7 + rng.next() * 0.6) * rate;
+    const n = Math.floor(expected) + (rng.next() < expected % 1 ? 1 : 0);
     for (let k = 0; k < n; k++) {
       const user = rng.pick(users);
-      const isFlight = rng.next() < 0.56;
+      const isFlight = !hotels.length || (services.length > 0 && rng.next() < 0.56);
+      if (isFlight && !services.length) continue;
       const lead = rng.next() < 0.3 ? rng.int(0, 6) : rng.next() < 0.75 ? rng.int(7, 29) : rng.int(30, 58);
       let doc;
       if (isFlight) {
@@ -220,7 +243,7 @@ export function generateHistory({ airlineSuppliers, hotelSuppliers, services, ho
       }
       const _id = new mongoose.Types.ObjectId();
       const paymentId = new mongoose.Types.ObjectId();
-      const special = rng.next() < 0.04 ? rng.pick(REQUESTS) : null;
+      const special = rng.next() < 0.04 ? rng.pick(REQUESTS[doc.type]) : null;
       bookings.push({
         _id,
         userId: user._id,

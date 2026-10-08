@@ -13,7 +13,7 @@ A short guide for each kind of Atlas user: what you can now do, and where to fin
 - **Try as Atlas admin** — the platform console, with a small dataset.
 
 Press **Start demo**. You get a private copy that nobody else sees, and nothing you do reaches the real site. A dark banner stays on top while the demo runs.
-- **Airline and hotel demos:** use **View as a traveller** to search and book your own airline's flights or your own hotel's rooms (the payment is fake). Then use **Back to the console** to see the booking arrive, with its notification.
+- **Airline and hotel demos:** every console page comes filled with demo bookings, requests, statements and tickets. Use **View as a traveller** (the demo traveller already has two trips) to search and book your own airline's flights or your own hotel's rooms (the payment is fake). Then use **Back to the console** to see the booking arrive, with its notification.
 - **Leaving:** **Back to traveller view** (or **Leave demo** in the header) deletes the demo. It also ends by itself after 30 minutes idle or 2 hours.
 - **Limits:** up to 3 demos per hour. Photo uploads are off in demos (pick from the gallery instead).
 

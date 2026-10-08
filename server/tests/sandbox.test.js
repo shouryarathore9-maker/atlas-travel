@@ -47,9 +47,9 @@ describe('visitor sandbox', () => {
     const list = departures.items || departures.departures || departures.flights;
     expect(list.length).toBe(1);
     expect(String(list[0]._id)).not.toBe(String(flight._id));
-    // Only seeded (synthetic) bookings are copied — never a real traveller's.
-    const copied = await Booking.find({ sandboxId: { $ne: null } }).lean();
-    expect(copied.map((c) => c.travellers[0].firstName)).toEqual(['Seeded']);
+    // No real booking (nor a seeded one) is ever copied: a demo makes its own.
+    const demoBookings = await Booking.find({ sandboxId: { $ne: null } }).lean();
+    expect(demoBookings.filter((c) => ['Priya', 'Seeded'].includes(c.travellers[0]?.firstName))).toEqual([]);
 
     // Real ids are invisible inside the sandbox, and sandbox ids are invisible to the real site.
     await visitor.get(`/api/sandbox/flights/${flight._id}`).expect(404);
@@ -64,9 +64,10 @@ describe('visitor sandbox', () => {
 
     // Changes stay inside: a rate-card save is audit-logged only in the sandbox.
     const card = (await visitor.get('/api/sandbox/supplier/rate-card').expect(200)).body.rateCard;
+    const seededEntries = await AuditLog.countDocuments({ sandboxId: { $ne: null }, action: 'rate_card.update' });
     await visitor.put('/api/sandbox/supplier/rate-card').send({ rateCard: card }).expect(200);
     expect(await AuditLog.countDocuments({ sandboxId: null, action: 'rate_card.update' })).toBe(0);
-    expect(await AuditLog.countDocuments({ sandboxId: { $ne: null }, action: 'rate_card.update' })).toBe(1);
+    expect(await AuditLog.countDocuments({ sandboxId: { $ne: null }, action: 'rate_card.update' })).toBe(seededEntries + 1);
     expect((await Supplier.findById(supplier._id)).rateCard.version).toBe(1);
 
     // Ending deletes every sandbox document.
@@ -102,6 +103,25 @@ describe('visitor sandbox', () => {
     const capped = await visitor.post('/api/sandbox/payments/mock').send({ idempotencyKey: 'demo-key-0002', method: 'upi', booking: hotelBooking(sandboxHotel) });
     expect(capped.status).toBe(409);
     expect(capped.body.error.code).toBe('SANDBOX_LIMIT');
+  });
+
+  it('every console page of a hotel demo has something on it', async () => {
+    const hotel = await createHotel({ starRating: 5, rating: { average: 4.6, count: 12 }, roomTypes: [{ name: 'Deluxe Room', occupancy: { adults: 2, children: 1 }, taxesAndFees: 720, roomsAvailable: 12, roomsTotal: 12 }] });
+    const { visitor, res } = await startDemo({ kind: 'hotel', supplierId: String(hotel.supplierId) });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    const get = async (path) => (await visitor.get(`/api/sandbox${path}`).expect(200)).body;
+    expect((await get('/supplier/reservations')).items.length).toBeGreaterThan(1); // upcoming
+    expect((await get('/supplier/reservations?when=past')).items.length).toBeGreaterThan(10);
+    expect((await get('/supplier/special-requests?status=open')).items.length).toBeGreaterThan(0);
+    expect((await get('/supplier/special-requests?status=answered')).items.length).toBeGreaterThan(0);
+    expect((await get('/supplier/offers')).items.length).toBeGreaterThan(0);
+    expect((await get('/supplier/statements')).statements.length).toBeGreaterThan(0);
+    expect((await get('/supplier/tickets')).tickets.length).toBeGreaterThan(0);
+    expect((await get('/notifications')).notifications.length).toBeGreaterThan(1);
+    expect(await AuditLog.countDocuments({ sandboxId: { $ne: null } })).toBeGreaterThan(0);
+    await visitor.post('/api/sandbox/switch').expect(200);
+    expect((await get('/bookings/me')).bookings.length).toBe(2);
+    expect((await get('/me/travellers')).travellers.length).toBe(2);
   });
 
   it('admin demo: its own small dataset; actions never reach real data', async () => {
