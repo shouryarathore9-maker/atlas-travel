@@ -24,7 +24,19 @@ export async function addTraveller(req, res) {
   const list = req.user.savedTravellers || [];
   if (list.length >= MAX_SAVED_TRAVELLERS) throw new HttpError(409, `You can save up to ${MAX_SAVED_TRAVELLERS} travellers.`, 'LIMIT');
   assertUnique(list, req.validated.body);
-  const user = await User.findByIdAndUpdate(req.user._id, { $push: { savedTravellers: req.validated.body } }, { returnDocument: 'after' }).lean();
+  // The same checks again, atomically, so two requests at once (a double-tap) can't both add.
+  const { firstName, lastName } = req.validated.body;
+  const exact = (v) => new RegExp(`^${v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+  const user = await User.findOneAndUpdate(
+    {
+      _id: req.user._id,
+      [`savedTravellers.${MAX_SAVED_TRAVELLERS - 1}`]: { $exists: false },
+      savedTravellers: { $not: { $elemMatch: { firstName: exact(firstName), lastName: exact(lastName) } } },
+    },
+    { $push: { savedTravellers: req.validated.body } },
+    { returnDocument: 'after' },
+  ).lean();
+  if (!user) throw new HttpError(409, 'You’ve already saved someone with that name. Add a middle name or suffix to tell them apart.', 'DUPLICATE_NAMES');
   res.status(201).json({ travellers: user.savedTravellers });
 }
 

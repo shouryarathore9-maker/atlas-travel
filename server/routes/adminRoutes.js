@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import {
   adminBookingsSchema,
+  adminUsersSchema,
+  getUser,
+  listUsers,
   analyticsSchema,
   getAnalytics,
   auditQuerySchema,
@@ -18,6 +21,7 @@ import { adminStatement, adminStatements, adminStatementsSchema, markPaid, markP
 import { getCommission, getLimits, listTemplates, updateCommission, updateLimits, updateTemplate } from '../controllers/pricingController.js';
 import { adminClose, adminEscalate, adminGet, adminList, adminListSchema, adminReply, escalateSchema, messageSchema } from '../controllers/ticketController.js';
 import { adminOnly, requireAuth } from '../middleware/auth.js';
+import { once } from '../middleware/once.js';
 import { validate } from '../middleware/validate.js';
 
 const router = Router();
@@ -30,15 +34,17 @@ router.get('/suppliers', listSuppliers);
 router.post('/suppliers/:id/suspend', validate(suspendSchema), suspendSupplier);
 router.post('/suppliers/:id/reactivate', reactivateSupplier);
 
+router.get('/users', validate(adminUsersSchema, 'query'), listUsers);
+router.get('/users/:id', getUser);
 router.get('/bookings', validate(adminBookingsSchema, 'query'), listBookings);
 router.get('/bookings/:ref', getBooking);
 router.get('/special-requests', listSpecialRequests);
 
 router.get('/tickets', validate(adminListSchema, 'query'), adminList);
 router.get('/tickets/:id', adminGet);
-router.post('/tickets/:id/reply', validate(messageSchema), adminReply);
+router.post('/tickets/:id/reply', validate(messageSchema), once, adminReply);
 router.post('/tickets/:id/close', adminClose);
-router.post('/tickets/:id/escalate', validate(escalateSchema), adminEscalate);
+router.post('/tickets/:id/escalate', validate(escalateSchema), once, adminEscalate);
 router.post('/tickets/:id/resolve', validate(resolveSchema), resolveQuery);
 
 router.get('/statements', validate(adminStatementsSchema, 'query'), adminStatements);
@@ -46,17 +52,17 @@ router.get('/statements/:id', adminStatement);
 router.post('/statements/:id/mark-paid', validate(markPaidSchema), markPaid);
 
 router.get('/offers', validate(offerListSchema, 'query'), adminOffers.list);
-router.post('/offers', validate(offerInputSchema), adminOffers.create);
+router.post('/offers', validate(offerInputSchema), once, adminOffers.create);
 router.get('/offers/:id', adminOffers.get);
-router.put('/offers/:id', validate(offerInputSchema), adminOffers.update);
+router.put('/offers/:id', validate(offerInputSchema), once, adminOffers.update);
 router.post('/offers/:id/pause', adminOffers.pause);
 router.post('/offers/:id/resume', adminOffers.resume);
 
 router.get('/templates', listTemplates);
-router.put('/templates/:key', updateTemplate);
+router.put('/templates/:key', once, updateTemplate);
 router.get('/settings/commission', getCommission);
-router.put('/settings/commission', updateCommission);
+router.put('/settings/commission', once, updateCommission);
 router.get('/settings/pricing-limits', getLimits);
-router.put('/settings/pricing-limits', updateLimits);
+router.put('/settings/pricing-limits', once, updateLimits);
 
 export default router;

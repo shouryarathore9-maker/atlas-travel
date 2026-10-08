@@ -125,6 +125,72 @@ export async function getAnalytics(req, res) {
   res.json(await analytics({ from, to, product: product === 'all' ? null : product, supplierId }));
 }
 
+// ---------- Users (read-only) ----------
+// prd.md → Admin console → Users: every account, searchable, with its bookings and tickets. No edits —
+// admin oversees accounts, it doesn't change them. Seeded history accounts are hidden unless asked for.
+
+const HISTORY_EMAIL = /@history\.atlas\.invalid$/;
+
+export const adminUsersSchema = z.object({
+  q: z.string().trim().max(80).optional().default(''),
+  role: z.enum(['traveler', 'airline_manager', 'hotel_manager', 'admin']).optional(),
+  seeded: z.enum(['true', 'false']).optional().default('false'),
+  ...pagination,
+});
+
+export async function listUsers(req, res) {
+  const { q, role, seeded, page, limit } = req.validated.query;
+  const filter = {
+    ...(role && { role }),
+    ...(seeded !== 'true' && { email: { $not: HISTORY_EMAIL } }),
+    ...(q && { $or: [{ email: new RegExp(escapeRegex(q.toLowerCase())) }, { name: new RegExp(escapeRegex(q), 'i') }] }),
+  };
+  const [items, total] = await Promise.all([
+    User.find(filter, { name: 1, email: 1, role: 1, supplierId: 1, createdAt: 1 }).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+    User.countDocuments(filter),
+  ]);
+  const ids = items.map((u) => u._id);
+  const [counts, suppliers] = await Promise.all([
+    Booking.aggregate([{ $match: { userId: { $in: ids } } }, { $group: { _id: '$userId', n: { $sum: 1 } } }]),
+    Supplier.find({ _id: { $in: items.map((u) => u.supplierId).filter(Boolean) } }, { name: 1 }).lean(),
+  ]);
+  const bookingsOf = Object.fromEntries(counts.map((c) => [String(c._id), c.n]));
+  const supplierOf = Object.fromEntries(suppliers.map((s) => [String(s._id), s.name]));
+  res.json({
+    items: items.map((u) => ({ ...u, bookings: bookingsOf[String(u._id)] || 0, supplierName: u.supplierId ? supplierOf[String(u.supplierId)] || null : null })),
+    total,
+    page,
+    pages: Math.max(1, Math.ceil(total / limit)),
+  });
+}
+
+export async function getUser(req, res) {
+  if (!mongoose.isValidObjectId(req.params.id)) throw new HttpError(404, 'We could not find that account.', 'NOT_FOUND');
+  const user = await User.findById(req.params.id, { passwordHash: 0 }).lean();
+  if (!user) throw new HttpError(404, 'We could not find that account.', 'NOT_FOUND');
+  const [bookings, bookingCount, tickets, supplier] = await Promise.all([
+    Booking.find({ userId: user._id }, { bookingReference: 1, type: 1, itemSummary: 1, travelDates: 1, status: 1, 'fareBreakdown.total': 1, createdAt: 1 }).sort({ createdAt: -1 }).limit(20).lean(),
+    Booking.countDocuments({ userId: user._id }),
+    Ticket.find({ travellerId: user._id }, { bookingReference: 1, subject: 1, status: 1, updatedAt: 1 }).sort({ updatedAt: -1 }).limit(20).lean(),
+    user.supplierId ? Supplier.findById(user.supplierId, { name: 1, kind: 1, status: 1 }).lean() : null,
+  ]);
+  res.json({
+    user: {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      createdAt: user.createdAt,
+      savedTravellers: (user.savedTravellers || []).length,
+    },
+    supplier,
+    bookings,
+    bookingCount,
+    tickets,
+  });
+}
+
 // ---------- Bookings (read-only) and special requests ----------
 
 export const adminBookingsSchema = z.object({

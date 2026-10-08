@@ -68,6 +68,11 @@ export async function uploadBlob(path, blob) {
   return data;
 }
 
+// The server refuses an identical request sent again within seconds (a double-tap) with
+// DUPLICATE_SUBMIT. The first request is already being handled and will update the page, so the
+// duplicate just never settles — no error message for something that worked.
+const never = () => new Promise(() => {});
+
 export async function api(path, { method = 'GET', body, query, signal, raw = false } = {}) {
   let res;
   try {
@@ -87,6 +92,7 @@ export async function api(path, { method = 'GET', body, query, signal, raw = fal
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     noticeSandboxEnd(data);
+    if (data.error?.code === 'DUPLICATE_SUBMIT') return never();
     throw new ApiError(res.status, data.error, data);
   }
   return data;

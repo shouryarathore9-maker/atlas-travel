@@ -258,7 +258,8 @@ function HotelBooking({ data, stay }) {
                               aria-pressed={isSelected}
                               aria-label={`${isSelected ? 'Selected' : 'Select'} ${r.name}, ${p.name}`}
                               disabled={r.roomsAvailable === 0 || r.salesStopped}
-                              onClick={() => setSelected(isSelected ? null : { room: r.name, plan: p.key })}
+                              // Tapping the chosen rate again keeps it (an accidental double-tap must not clear the choice).
+                              onClick={() => setSelected({ room: r.name, plan: p.key })}
                             >
                               {isSelected ? 'Selected' : 'Select'}
                             </button>

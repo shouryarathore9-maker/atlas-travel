@@ -143,3 +143,28 @@ describe('platform pricing limits', () => {
     expect((await searchFlights())[0].price).toBe(2000);
   });
 });
+
+describe('admin users list (read-only)', () => {
+  it('shows a new sign-up with their bookings; never the password hash; seeded accounts hidden by default; admin-only', async () => {
+    const newcomer = request.agent(app);
+    await newcomer.post('/api/auth/register').send({ name: 'Nisha Rao', email: 'nisha.rao@example.com', password: 'Travel123' }).expect(201);
+    await User.create({ name: 'History Guest', email: 'guest.1@history.atlas.invalid', passwordHash: 'x', role: 'traveler' });
+    const admin = await loggedInAgent({ role: 'admin' });
+
+    const list = (await admin.get('/api/admin/users').query({ q: 'nisha' }).expect(200)).body;
+    expect(list.items).toHaveLength(1);
+    expect(list.items[0]).toMatchObject({ name: 'Nisha Rao', email: 'nisha.rao@example.com', role: 'traveler', bookings: 0 });
+    expect(list.items[0].passwordHash).toBeUndefined();
+    const all = (await admin.get('/api/admin/users').expect(200)).body.items.map((u) => u.email);
+    expect(all).not.toContain('guest.1@history.atlas.invalid');
+    expect((await admin.get('/api/admin/users').query({ seeded: 'true', q: 'history' }).expect(200)).body.items).toHaveLength(1);
+
+    const detail = (await admin.get(`/api/admin/users/${list.items[0]._id}`).expect(200)).body;
+    expect(detail.user.email).toBe('nisha.rao@example.com');
+    expect(JSON.stringify(detail)).not.toContain('passwordHash');
+    await admin.get('/api/admin/users/not-an-id').expect(404);
+
+    await newcomer.get('/api/admin/users').expect(403);
+    await request(app).get('/api/admin/users').expect(401);
+  });
+});

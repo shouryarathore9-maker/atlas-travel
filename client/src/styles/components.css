@@ -416,11 +416,31 @@ legend {
   width: 100%;
   max-height: 88vh;
   max-height: 88dvh; /* follows Chrome's/Safari's sliding address bar */
-  padding-bottom: env(safe-area-inset-bottom);
   overflow: auto;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   box-shadow: var(--shadow-float);
-  padding: var(--space-5);
+  --modal-pad: var(--space-5);
+  --modal-pad-bottom: calc(var(--space-5) + env(safe-area-inset-bottom));
+  padding: var(--modal-pad) var(--modal-pad) var(--modal-pad-bottom);
+}
+/* The title with its close button, and the footer with the main action, stay pinned while a long
+   dialog (e.g. Filters on a phone) scrolls between them. */
+.modal-header {
+  position: sticky;
+  top: calc(-1 * var(--modal-pad));
+  z-index: 2;
+  margin: calc(-1 * var(--modal-pad)) calc(-1 * var(--modal-pad)) var(--space-4);
+  padding: var(--modal-pad) var(--modal-pad) var(--space-3);
+  background: var(--color-surface);
+}
+.modal-footer {
+  position: sticky;
+  bottom: calc(-1 * var(--modal-pad-bottom));
+  z-index: 2;
+  margin: var(--space-5) calc(-1 * var(--modal-pad)) calc(-1 * var(--modal-pad-bottom));
+  padding: var(--space-3) var(--modal-pad) var(--modal-pad-bottom);
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-sand-soft);
 }
 @media (min-width: 768px) {
   .modal-backdrop {
@@ -435,7 +455,6 @@ legend {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--space-4);
 }
 .modal-header h2 {
   font-size: 1.5rem;

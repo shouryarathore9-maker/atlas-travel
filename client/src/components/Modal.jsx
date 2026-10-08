@@ -49,7 +49,7 @@ export default function Modal({ title, onClose, children, footer }) {
           </button>
         </div>
         {children}
-        {footer && <div style={{ marginTop: 'var(--space-5)' }}>{footer}</div>}
+        {footer && <div className="modal-footer">{footer}</div>}
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Field from '../components/Field.jsx';
 import { Banner, EmptyState, ErrorState, SkeletonList } from '../components/States.jsx';
 import { meApi } from '../api/resources.js';
@@ -16,6 +16,7 @@ export default function SavedTravellers() {
   const [editing, setEditing] = useState(null); // 'new' | id
   const [form, setForm] = useState(blank);
   const [state, setState] = useState({ busy: false, error: null, touched: false });
+  const saving = useRef(false);
   const [notice, setNotice] = useState(null);
 
   const errors = { firstName: namePartError(form.firstName, 'first name'), lastName: namePartError(form.lastName, 'last name') };
@@ -27,8 +28,10 @@ export default function SavedTravellers() {
 
   async function save(e) {
     e.preventDefault();
+    if (saving.current) return; // a second tap before the button disables
     setState((s) => ({ ...s, touched: true }));
     if (errors.firstName || errors.lastName) return;
+    saving.current = true;
     setState({ busy: true, error: null, touched: true });
     try {
       const body = { firstName: form.firstName.trim(), lastName: form.lastName.trim(), ageCategory: form.ageCategory };
@@ -37,6 +40,8 @@ export default function SavedTravellers() {
       setEditing(null);
     } catch (err) {
       setState({ busy: false, error: err.message, touched: true });
+    } finally {
+      saving.current = false;
     }
   }
 

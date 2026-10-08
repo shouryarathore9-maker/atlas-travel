@@ -189,84 +189,6 @@
    first screen. Fields pair up two per row (From | To, Departure | Travellers, Check-in | Check-out),
    icons drop out, and the card is about half as tall as the stacked version. */
 @media (max-width: 767px) {
-  /* Result cards on phones: several per screen, not one. Flights: airline | price + button, then the
-     timeline. Hotels: a thumbnail on the left, details and price on the right (Booking.com-style). */
-  .flight-card {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: 'airline price' 'timeline timeline';
-    gap: var(--space-3);
-    padding: 14px;
-  }
-  .flight-card-airline {
-    grid-area: airline;
-  }
-  .flight-card .flight-timeline {
-    grid-area: timeline;
-    gap: var(--space-3);
-  }
-  .flight-card .result-price {
-    grid-area: price;
-    align-items: flex-end;
-    text-align: right;
-  }
-  .result-price .btn {
-    margin-top: 6px;
-  }
-  .result-title {
-    font-size: 1.12rem;
-  }
-  .time {
-    font-size: 1.15rem;
-  }
-  .price {
-    font-size: 1.2rem;
-  }
-  .hotel-card {
-    grid-template-columns: 112px minmax(0, 1fr);
-    gap: 0;
-  }
-  .hotel-card-image {
-    grid-column: 1;
-    grid-row: 1;
-    aspect-ratio: auto;
-    width: 100%;
-    min-width: 0;
-    height: 100%;
-    min-height: 150px;
-  }
-  .hotel-card-body {
-    grid-column: 2;
-    min-width: 0;
-    padding: 12px;
-    gap: 6px;
-  }
-  /* Price on the left, See rooms on the right, under both. */
-  .hotel-card .result-price {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    column-gap: var(--space-3);
-    padding: 10px 12px 12px;
-    border-top: 1px solid var(--color-sand-soft);
-  }
-  .hotel-card .result-price .card-cta {
-    grid-column: 2;
-    grid-row: 1 / span 3;
-    margin: 0;
-  }
-  .hotel-card .badge {
-    font-size: 0.72rem;
-  }
-  .hotel-card-body > p.small {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-}
-
-@media (max-width: 767px) {
   .hero {
     padding-top: 170px;
     padding-bottom: var(--space-5);
@@ -345,18 +267,6 @@
   }
   .party-toggle {
     min-height: 30px;
-  }
-  /* The travellers steppers open as a bottom sheet (a dropdown wouldn't fit a half-width field). */
-  .party-panel {
-    position: fixed;
-    left: 0;
-    right: 0;
-    top: auto;
-    bottom: 0;
-    width: auto;
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-    padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
-    z-index: 60;
   }
 }
 
@@ -2233,17 +2143,24 @@
 .traveller-row {
   border: 0;
   border-top: 1px solid var(--color-sand-soft);
-  padding: var(--space-3) 0 0;
-  margin: 0;
+  padding: var(--space-4) 0 0;
+  margin: var(--space-4) 0 0;
 }
 .traveller-row:first-child {
   border-top: 0;
   padding-top: 0;
+  margin-top: 0;
 }
+/* Floated so the legend sits inside the row, under the divider — not on top of it. */
 .traveller-row legend {
+  float: left;
+  width: 100%;
   font-weight: 600;
   padding: 0;
   margin-bottom: var(--space-2);
+}
+.traveller-row legend + * {
+  clear: both;
 }
 .saved-picker {
   max-width: 280px;
@@ -3279,4 +3196,156 @@
     width: auto;
     max-height: 70dvh;
   }
+}
+
+/* Phone: the travellers steppers open as a bottom sheet (a dropdown can't fit a half-width field).
+   Kept after the base .party-panel rule so it wins the cascade. */
+@media (max-width: 767px) {
+  .party-picker .party-panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    width: auto;
+    max-height: 85dvh;
+    overflow-y: auto;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+    z-index: 60;
+    /* Dims the page behind the sheet; a tap there closes it. */
+    box-shadow: 0 0 0 100vmax rgba(23, 34, 31, 0.35);
+  }
+}
+
+/* Phone result cards — after the base card rules so they win the cascade. */
+@media (max-width: 767px) {
+  /* Result cards on phones: several per screen, not one. Flights: airline | price + button, then the
+     timeline. Hotels: a thumbnail on the left, details and price on the right (Booking.com-style). */
+  .flight-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'airline price' 'timeline timeline';
+    gap: var(--space-3);
+    padding: 14px;
+  }
+  .flight-card-airline {
+    grid-area: airline;
+  }
+  .flight-card .flight-timeline {
+    grid-area: timeline;
+    gap: var(--space-3);
+  }
+  .flight-card .result-price {
+    grid-area: price;
+    align-items: flex-end;
+    text-align: right;
+  }
+  .result-price .btn {
+    margin-top: 6px;
+  }
+  .result-title {
+    font-size: 1.12rem;
+  }
+  .time {
+    font-size: 1.15rem;
+  }
+  .price {
+    font-size: 1.2rem;
+  }
+  .hotel-card {
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: 0;
+  }
+  .hotel-card-image {
+    grid-column: 1;
+    grid-row: 1;
+    aspect-ratio: auto;
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    min-height: 150px;
+  }
+  .hotel-card-body {
+    grid-column: 2;
+    min-width: 0;
+    padding: 12px;
+    gap: 6px;
+  }
+  /* Price on the left, See rooms on the right, under both. */
+  .hotel-card .result-price {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: var(--space-3);
+    padding: 10px 12px 12px;
+    border-top: 1px solid var(--color-sand-soft);
+  }
+  .hotel-card .result-price .card-cta {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+    margin: 0;
+  }
+  .hotel-card .badge {
+    font-size: 0.72rem;
+  }
+  .hotel-card-body > p.small {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+/* Phone: the status and price under a trip line up with its details, not right-aligned. */
+@media (max-width: 767px) {
+  .booking-row-side {
+    align-items: flex-start;
+  }
+}
+
+/* Saved travellers: Edit / Delete stay beside the name on every card; a long name wraps instead. */
+.saved-row > .spread {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+.saved-row > .spread > div:first-child {
+  min-width: 0;
+}
+.saved-row > .spread > .row {
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+}
+
+/* Phone: console search bars wrap — each field gets a usable width, the button keeps its size. */
+@media (max-width: 767px) {
+  .admin-search {
+    flex-wrap: wrap;
+  }
+  .admin-search > .input,
+  .admin-search > input,
+  .admin-search > .field,
+  .admin-search > select {
+    flex: 1 1 160px;
+    min-width: 0;
+    max-width: none;
+  }
+}
+
+/* Label / value pairs (admin → user detail). */
+.detail-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3) var(--space-5);
+  margin: 0;
+}
+.detail-list dt {
+  font-size: 0.78rem;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.detail-list dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
 }

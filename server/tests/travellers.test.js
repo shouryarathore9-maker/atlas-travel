@@ -75,6 +75,29 @@ describe('saved travellers (workflow 30)', () => {
   });
 });
 
+describe('saved travellers: double-tap', () => {
+  it('two identical adds at the same moment save one traveller', async () => {
+    const agent = await loggedInAgent();
+    const body = { firstName: 'Meera', lastName: 'Iyer', ageCategory: 'adult' };
+    const results = await Promise.all([1, 2, 3].map(() => agent.post('/api/me/travellers').send(body)));
+    expect(results.map((r) => r.status).sort()).toEqual([201, 409, 409]);
+    expect((await agent.get('/api/me/travellers').expect(200)).body.travellers).toHaveLength(1);
+  });
+
+  it('a double-sent message or offer is stored once; a deliberate repeat later still goes through', async () => {
+    const { agent } = await supplierWithManager('airline');
+    const offer = { title: 'Monsoon deal', summary: '5% off', description: '', image: '/images/seed/offers/gift.jpg', auto: false, code: 'MONSOON5', scope: 'flights', discountType: 'percent', value: 5, maxDiscount: 500, minSpend: 0, redemptionLimit: null, firstBookingsOnly: false, validFrom: futureDate(0), validTo: futureDate(20) };
+    const created = await Promise.all([1, 2].map(() => agent.post('/api/supplier/offers').send(offer)));
+    expect(created.map((r) => r.status).sort()).toEqual([201, 409]);
+    expect(created.find((r) => r.status === 409).body.error.code).toBe('DUPLICATE_SUBMIT');
+
+    const RequestOnce = (await import('mongoose')).default.model('RequestOnce');
+    await RequestOnce.updateMany({}, { $set: { at: new Date(Date.now() - 60e3) } }); // the window has passed
+    const again = await agent.post('/api/supplier/offers').send(offer);
+    expect(again.body.error?.code).not.toBe('DUPLICATE_SUBMIT'); // reaches the handler (code already taken → its own error)
+  });
+});
+
 describe('special requests (workflow 4)', () => {
   it('the supplier answers once, the traveller is told, admin can read it, other suppliers can’t', async () => {
     const { supplier, agent: manager } = await supplierWithManager('airline');

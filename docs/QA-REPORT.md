@@ -165,3 +165,28 @@ Ruled out by the review: settlement closes are idempotent; mark-paid is atomic; 
 - API smoke test: flight search, featured hotels, offers (themed artwork), admin sign-in, analytics 30 days 0.26 s / 180 days 0.29 s, 215 statements across Apr–Sep, pricing limits.
 - Demos on Vercel: hotel and airline demos start, show only seeded guests, and leave cleanly to the homepage (found and fixed live: leaving briefly bounced to sign-in).
 - Lighthouse (mobile settings): home — performance 86 · accessibility 100 · best practices 100; offers — 84 · 98 · 100; flight results — 84 · 98 · 100.
+
+---
+
+# Interactive phone QA (8 Oct 2026, after the phone redesign)
+
+Why this round: the owner found the travellers picker rendering as a transparent panel off the side of the search card on an iPhone. My earlier checks were screenshots and page-width measurements — the picker had never been opened after the redesign. This round opened, tapped and double-tapped every control at 390×844 (iPhone) and checked the shared pieces again at 1280px, in real and demo (sandbox) sessions for traveller, airline, hotel and admin.
+
+**Root cause of the reported bug:** the phone rule turning the travellers dropdown into a bottom sheet was placed *above* the base rule in `pages.css`; with equal specificity the later base rule won. A cascade check (`npm run check:css`, now part of `npm run lint`) found 8 more phone declarations silently overridden the same way (result-card padding, font sizes, photo aspect) — all moved and fixed.
+
+| Area | Found | Fixed |
+|---|---|---|
+| Home search | Travellers picker not a sheet (the reported bug) | Bottom sheet with a dimmed page behind it |
+| Phone styles | 8 phone overrides never applied | Moved after their base rules; cascade check added to lint |
+| Filters / any long dialog | "Show N stays" sat 500px below the screen | Dialog title (with ×) and footer (main action) stay pinned; safe-area padding was being overwritten by the shorthand — fixed |
+| Saved travellers | Double-tap Save created the same traveller twice | Atomic conditional add on the server (+ test); client re-entry guard |
+| All create/save actions | Double-tap could create two offers, tickets, messages, services, reschedules or rate-card versions | Server double-tap guard (10 s, per user + request); the duplicate's refusal is ignored by the client; a failed request can be retried at once (+ tests) |
+| Hotel rooms | Double-tapping Select cleared the choice | Select keeps the chosen rate |
+| Checkout | "Adult 2" heading collided with the field above | Legend inside the row with spacing |
+| My trips | Price indented under the details | Left-aligned on phones |
+| Saved travellers list | Buttons wrapped under the name on some cards | Always beside the name |
+| Console search bars | Date + text field squashed ("Flight n…") | Fields wrap to usable widths |
+
+**Verified working (no change needed):** menu panel and every link; tabs; swap; same-city and date validation; search double-submit (one navigation); sort; Modify search; flight seat picking/moving/double-tap (36px seats, no inner scroll); offer codes (invalid / valid / remove); failed then successful payment, triple-tap Pay → one booking; cancel dialog + double-tap → one refund; help dialog; notifications panel (full width, mark all read, closes on outside tap); photo viewer (next, counter, Escape); departure Stop/Resume sales, Reschedule and Cancel dialogs (double-tap cancel → once); new service (double-tap → one); rate card preview and save; special-request reply (once); offer create/pause with confirmation; statement query dialog; hotel property save; reservation cancel; analytics filters dialog, tabs and data tables; supplier suspend/reactivate (one audit entry); ticket reply/escalate/resolve (once); mark as paid; settings saves; bookings search/detail; admin offer create. Every page 390px wide (no sideways page scroll); desktop unchanged.
+
+New: **Admin → Users** (owner's choice: read-only list) — tested at 390px and by `admin-powers.test.js`.

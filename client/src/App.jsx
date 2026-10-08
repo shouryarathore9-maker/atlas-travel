@@ -44,6 +44,8 @@ const AdminSpecialRequests = lazy(() => import('./pages/admin/AdminSpecialReques
 const AdminOffers = lazy(() => import('./pages/admin/AdminOffers.jsx'));
 const AdminSettings = lazy(() => import('./pages/admin/AdminSettings.jsx'));
 const AdminSuppliers = lazy(() => import('./pages/admin/AdminSuppliers.jsx'));
+const AdminUsers = lazy(() => import('./pages/admin/AdminUsers.jsx').then((m) => ({ default: m.AdminUsers })));
+const AdminUser = lazy(() => import('./pages/admin/AdminUsers.jsx').then((m) => ({ default: m.AdminUser })));
 const AdminSettlement = lazy(() => import('./pages/admin/AdminSettlement.jsx').then((m) => ({ default: m.AdminSettlement })));
 const AdminStatement = lazy(() => import('./pages/admin/AdminSettlement.jsx').then((m) => ({ default: m.AdminStatement })));
 const OfferEditor = lazy(() => import('./pages/OfferEditor.jsx'));
@@ -142,6 +144,8 @@ export default function App() {
             <Route path="offers/new" element={<OfferEditor scope="admin" />} />
             <Route path="offers/:id" element={<OfferEditor scope="admin" key="edit" />} />
             <Route path="suppliers" element={<AdminSuppliers />} />
+            <Route path="users" element={<AdminUsers />} />
+            <Route path="users/:id" element={<AdminUser />} />
             <Route path="settlement" element={<AdminSettlement />} />
             <Route path="settlement/:id" element={<AdminStatement />} />
             <Route path="settings" element={<AdminSettings />} />
