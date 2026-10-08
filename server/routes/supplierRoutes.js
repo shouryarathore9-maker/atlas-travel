@@ -1,4 +1,6 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
+import { deleteUpload, listUploads, uploadPhoto } from '../controllers/photoController.js';
+import { MAX_PHOTO_BYTES, PHOTO_TYPES } from '../models/Photo.js';
 import {
   catalogue,
   createService,
@@ -39,5 +41,9 @@ router.post('/departures/:id/resume-sales', airlineOnly, resumeDepartureSales);
 
 router.get('/hotel', hotelOnly, getOwnHotel);
 router.put('/hotel', hotelOnly, validate(hotelInputSchema), updateOwnHotel);
+router.get('/hotel/photos', hotelOnly, listUploads);
+// Raw image body (no multipart parsing); the size limit is enforced while the body is read.
+router.post('/hotel/photos', hotelOnly, express.raw({ type: PHOTO_TYPES, limit: MAX_PHOTO_BYTES }), uploadPhoto);
+router.delete('/hotel/photos/:id', hotelOnly, deleteUpload);
 
 export default router;

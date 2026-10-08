@@ -1,4 +1,4 @@
-import { api } from './client.js';
+import { api, uploadBlob } from './client.js';
 
 export const authApi = {
   me: () => api('/auth/me'),
@@ -57,6 +57,9 @@ export const supplierApi = {
   hotel: {
     get: (opts) => api('/supplier/hotel', opts),
     update: (body) => api('/supplier/hotel', { method: 'PUT', body }),
+    uploads: (opts) => api('/supplier/hotel/photos', opts),
+    upload: (blob) => uploadBlob('/supplier/hotel/photos', blob),
+    removeUpload: (id) => api(`/supplier/hotel/photos/${id}`, { method: 'DELETE' }),
   },
 };
 

@@ -5,6 +5,7 @@ import { Banner, ErrorState, Spinner } from '../../components/States.jsx';
 import { supplierApi } from '../../api/resources.js';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle.js';
 import { errorLines } from '../../lib/consoleForm.js';
+import PhotoPicker from './PhotoPicker.jsx';
 
 const blankRoom = () => ({
   originalName: null,
@@ -43,7 +44,7 @@ function validate(v) {
   const e = {};
   if (v.description.trim().length < 20) e.description = 'Write at least a sentence or two';
   if (!v.photos.length) e.photos = 'Pick at least one photo';
-  if (v.photos.length > 3) e.photos = 'Pick up to three photos';
+  if (v.photos.length > 6) e.photos = 'Pick up to six photos';
   if (!v.roomTypes.length) e.roomTypes = 'Keep at least one room type';
   const names = v.roomTypes.map((r) => r.name.trim().toLowerCase());
   v.roomTypes.forEach((r, i) => {
@@ -163,30 +164,10 @@ export default function HotelProperty() {
 
         <section className="card">
           <h2 className="h3">Photos</h2>
-          <p className="small muted">Pick up to three from the Atlas gallery, in order. The first is the main photo. Uploads aren’t available.</p>
-          <div className="gallery-picker" role="group" aria-label="Photo gallery" aria-describedby={errors.photos ? 'photos-error' : undefined}>
-            {catalogue.gallery.map((src) => {
-              const position = values.photos.indexOf(src);
-              return (
-                <button
-                  key={src}
-                  type="button"
-                  className={`gallery-option ${position >= 0 ? 'is-picked' : ''}`}
-                  aria-pressed={position >= 0}
-                  aria-label={`Gallery photo ${src.match(/(\d+)\.jpg$/)?.[1]}${position >= 0 ? `, picked as photo ${position + 1}` : ''}`}
-                  onClick={() => set('photos', toggle(values.photos, src))}
-                >
-                  <img src={src} alt="" loading="lazy" />
-                  {position >= 0 && <span className="gallery-order">{position + 1}</span>}
-                </button>
-              );
-            })}
-          </div>
-          {errors.photos && (
-            <p id="photos-error" className="field-error">
-              {errors.photos}
-            </p>
-          )}
+          <p className="small muted">
+            Pick up to {catalogue.uploads?.maxHotelPhotos || 6}, in order: the first is the main photo and the first three appear on your hotel page.
+          </p>
+          <PhotoPicker value={values.photos} onChange={(photos) => set('photos', photos)} gallery={catalogue.gallery} limits={catalogue.uploads} error={errors.photos} />
         </section>
 
         <section className="card">

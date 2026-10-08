@@ -27,6 +27,19 @@ function toQuery(params = {}) {
   return s ? `?${s}` : '';
 }
 
+// Uploads raw bytes (an image) with their content type; same error handling as api().
+export async function uploadBlob(path, blob) {
+  let res;
+  try {
+    res = await fetch(`${BASE_URL}/api${path}`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': blob.type }, body: blob });
+  } catch {
+    throw new ApiError(0, { message: 'We could not reach Atlas. Check your connection and try again.', code: 'NETWORK' });
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, data.error, data);
+  return data;
+}
+
 export async function api(path, { method = 'GET', body, query, signal } = {}) {
   let res;
   try {

@@ -13,6 +13,7 @@ import cronRoutes from './routes/cronRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import supplierRoutes from './routes/supplierRoutes.js';
 import { requestContext } from './utils/context.js';
+import { servePhoto } from './controllers/photoController.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import { HttpError } from './utils/httpError.js';
 
@@ -37,6 +38,7 @@ export function createApp() {
   app.use('/api', ensureDb); // reuses the cached Mongoose connection
   app.use('/api', requestContext); // real-data scope for every query in the request (see models/plugins/sandboxScope.js)
 
+  app.get('/api/photos/:id', servePhoto); // uploaded hotel photos (public, cached)
   app.use('/api/auth', authRoutes);
   app.use('/api/flights', flightRoutes);
   app.use('/api/hotels', hotelRoutes);

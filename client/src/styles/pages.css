@@ -1814,3 +1814,63 @@
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+
+/* Bell jingle when a new notification arrives (skipped for reduced motion) */
+.bell-btn.is-ringing svg {
+  transform-origin: 50% 8%;
+  animation: bell-ring 0.9s ease-in-out 1;
+}
+@keyframes bell-ring {
+  0% { transform: rotate(0); }
+  12% { transform: rotate(16deg); }
+  26% { transform: rotate(-14deg); }
+  40% { transform: rotate(10deg); }
+  54% { transform: rotate(-7deg); }
+  68% { transform: rotate(4deg); }
+  82% { transform: rotate(-2deg); }
+  100% { transform: rotate(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bell-btn.is-ringing svg {
+    animation: bell-fade 0.9s ease 1;
+  }
+  @keyframes bell-fade {
+    50% { opacity: 0.4; }
+  }
+}
+.bell-actions {
+  gap: var(--space-3);
+}
+.gallery-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.gallery-tile .gallery-option {
+  width: 100%;
+}
+.upload-row {
+  margin-top: var(--space-3);
+  align-items: center;
+}
+.upload-row label.btn {
+  cursor: pointer;
+}
+.upload-row label.is-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+#photo-upload:focus-visible + label {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.text-success {
+  color: var(--color-success);
+}
+.h4 {
+  font-size: 1rem;
+  font-family: var(--font-body);
+  font-weight: 600;
+  margin: 0;
+}

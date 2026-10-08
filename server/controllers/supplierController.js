@@ -6,6 +6,7 @@ import { z } from 'zod';
 import Booking from '../models/Booking.js';
 import Flight from '../models/Flight.js';
 import Hotel from '../models/Hotel.js';
+import Photo, { MAX_PHOTO_BYTES, MAX_UPLOADS_PER_HOTEL } from '../models/Photo.js';
 import Review from '../models/Review.js';
 import Service from '../models/Service.js';
 import { AIRCRAFT, AIRCRAFT_KEYS } from '../services/aircraft.js';
@@ -20,6 +21,8 @@ import { dateString, pagination } from '../utils/query.js';
 const notFound = (what = 'That item') => new HttpError(404, `${what} was not found.`, 'NOT_FOUND');
 const isId = (id) => mongoose.isValidObjectId(id);
 const cityByCode = Object.fromEntries(CITIES.map((c) => [c.code, c]));
+export const MAX_HOTEL_PHOTOS = 6;
+const UPLOAD_PATH = /^\/api\/photos\/[a-f0-9]{24}$/;
 const GALLERY = Array.from({ length: HOTEL_PHOTO_COUNT }, (_, i) => `/images/seed/hotels/hotel-${i + 1}.jpg`);
 
 // ---------- Shared ----------
@@ -68,6 +71,7 @@ export function catalogue(req, res) {
     hotelAmenities: HOTEL_AMENITIES,
     roomAmenities: ROOM_AMENITIES,
     gallery: GALLERY,
+    uploads: { maxCount: MAX_UPLOADS_PER_HOTEL, maxBytes: MAX_PHOTO_BYTES, maxHotelPhotos: MAX_HOTEL_PHOTOS },
     windowDays: WINDOW_DAYS,
   });
 }
@@ -291,7 +295,11 @@ const roomInput = z.object({
 export const hotelInputSchema = z.object({
   description: text(2000).min(20, 'Write at least a sentence or two'),
   amenities: z.array(z.enum(HOTEL_AMENITIES)).max(HOTEL_AMENITIES.length).default([]),
-  photos: z.array(z.enum(GALLERY, { error: 'Pick photos from the gallery' })).min(1, 'Pick at least one photo').max(3, 'Pick up to three photos'),
+  photos: z
+    .array(z.string().refine((p) => GALLERY.includes(p) || UPLOAD_PATH.test(p), 'Use gallery photos or your own uploads'))
+    .min(1, 'Pick at least one photo')
+    .max(MAX_HOTEL_PHOTOS, `Pick up to ${MAX_HOTEL_PHOTOS} photos`)
+    .refine((list) => new Set(list).size === list.length, 'Each photo can be used once'),
   salesStopped: z.boolean().default(false),
   roomTypes: z
     .array(roomInput)
@@ -306,6 +314,11 @@ export async function updateOwnHotel(req, res) {
   const hotel = await ownHotel(req);
   const input = req.validated.body;
   const before = snapshot(hotel, HOTEL_AUDIT_FIELDS);
+  // Uploaded photos must be this hotel's own.
+  const uploadIds = input.photos.filter((p) => UPLOAD_PATH.test(p)).map((p) => p.split('/').pop());
+  if (uploadIds.length && (await Photo.countDocuments({ _id: { $in: uploadIds }, supplierId: req.supplierId })) !== uploadIds.length) {
+    throw new HttpError(400, 'One of those photos isn’t one of your uploads.', 'VALIDATION_ERROR');
+  }
   const existing = Object.fromEntries(hotel.roomTypes.map((r) => [r.name, r.toObject()]));
 
   // Room types with bookings can't be removed or renamed (bookings refer to them by name).

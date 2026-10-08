@@ -80,7 +80,7 @@ describe('Role-gated pages', () => {
     mockUser = null;
   });
 
-  const renderAt = (path, role) =>
+  const renderAt = (path) =>
     render(
       <MemoryRouter initialEntries={[path]}>
         <Routes>

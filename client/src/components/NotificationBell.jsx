@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Icon from './Icon.jsx';
 import { notificationsApi } from '../api/resources.js';
+import { playChime, setSoundEnabled, soundEnabled } from '../lib/chime.js';
 import { timeAgo } from '../lib/format.js';
 
 const POLL_MS = 60 * 1000;
@@ -17,13 +18,26 @@ export default function NotificationBell() {
   const navigate = useNavigate();
   const wrapRef = useRef(null);
   const buttonRef = useRef(null);
+  const lastCount = useRef(null); // null until the first count arrives, so a page load never rings
+  const [ringing, setRinging] = useState(false);
+  const [sound, setSound] = useState(soundEnabled);
+
+  // A new notification arrived since the last check: shake the bell and play a short chime.
+  const applyCount = useCallback((count) => {
+    if (lastCount.current !== null && count > lastCount.current) {
+      setRinging(true);
+      playChime();
+    }
+    lastCount.current = count;
+    setUnread(count);
+  }, []);
 
   const refreshCount = useCallback(() => {
     notificationsApi
       .unread()
-      .then(({ unread }) => setUnread(unread))
+      .then(({ unread }) => applyCount(unread))
       .catch(() => {}); // the bell is non-essential; never surface polling errors
-  }, []);
+  }, [applyCount]);
 
   useEffect(() => {
     refreshCount();
@@ -47,10 +61,10 @@ export default function NotificationBell() {
       .list()
       .then(({ notifications, unread }) => {
         setItems(notifications);
-        setUnread(unread);
+        applyCount(unread);
       })
       .catch(setError);
-  }, []);
+  }, [applyCount]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -81,6 +95,7 @@ export default function NotificationBell() {
     if (!n.readAt) {
       setItems((list) => list.map((x) => (x._id === n._id ? { ...x, readAt: new Date().toISOString() } : x)));
       setUnread((u) => Math.max(0, u - 1));
+      lastCount.current = Math.max(0, (lastCount.current ?? 1) - 1);
       notificationsApi.read(n._id).catch(() => {});
     }
     setOpen(false);
@@ -90,6 +105,7 @@ export default function NotificationBell() {
   async function markAll() {
     setItems((list) => list?.map((x) => ({ ...x, readAt: x.readAt || new Date().toISOString() })));
     setUnread(0);
+    lastCount.current = 0;
     try {
       await notificationsApi.readAll();
     } catch {
@@ -103,7 +119,8 @@ export default function NotificationBell() {
       <button
         ref={buttonRef}
         type="button"
-        className="icon-btn bell-btn"
+        className={`icon-btn bell-btn ${ringing ? 'is-ringing' : ''}`}
+        onAnimationEnd={() => setRinging(false)}
         aria-label={label}
         aria-expanded={open}
         aria-haspopup="dialog"
@@ -120,9 +137,22 @@ export default function NotificationBell() {
         <div className="bell-panel" role="dialog" aria-label="Notifications">
           <div className="bell-panel-head">
             <h2 className="h4">Notifications</h2>
-            <button type="button" className="btn-text small" onClick={markAll} disabled={!unread}>
-              Mark all as read
-            </button>
+            <div className="row bell-actions">
+              <button
+                type="button"
+                className="btn-text small"
+                aria-pressed={sound}
+                onClick={() => {
+                  setSoundEnabled(!sound);
+                  setSound(!sound);
+                }}
+              >
+                Sound {sound ? 'on' : 'off'}
+              </button>
+              <button type="button" className="btn-text small" onClick={markAll} disabled={!unread}>
+                Mark all as read
+              </button>
+            </div>
           </div>
           {error && (
             <p className="small muted bell-empty">

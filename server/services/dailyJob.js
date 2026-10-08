@@ -4,6 +4,7 @@
 import Booking from '../models/Booking.js';
 import Hotel from '../models/Hotel.js';
 import { acquireLock, releaseLock } from '../models/JobLock.js';
+import { sweepUnusedPhotos } from '../controllers/photoController.js';
 import { trimNotifications } from './notify.js';
 import { materialiseDepartures, pruneDepartures, WINDOW_DAYS } from './schedule.js';
 
@@ -39,6 +40,7 @@ export const STEPS = [
   ['prune', ({ now }) => pruneDepartures({ now })],
   ['hotelRooms', ({ now }) => returnHotelRooms({ now })],
   ['notifications', () => trimNotifications()],
+  ['unusedPhotos', ({ now }) => sweepUnusedPhotos({ now })],
 ];
 
 export async function runDailyJob({ now = Date.now(), budgetMs = BUDGET_MS } = {}) {
