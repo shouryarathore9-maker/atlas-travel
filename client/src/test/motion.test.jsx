@@ -42,12 +42,11 @@ describe('CountUp', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders the final formatted value at once under reduced motion', () => {
+  it('counts even when the device asks for reduced motion (owner’s choice)', () => {
     reducedMotion(true);
     const { container } = render(<CountUp value={12345} format={formatPrice} />);
-    expect(screen.getByText('₹12,345')).toBeInTheDocument();
-    expect(container.querySelector('.is-counting')).toBeNull();
-    expect(container.querySelector('[aria-hidden="true"]')).toBeNull();
+    expect(container.querySelector('.count-up-live')).toHaveTextContent('₹0');
+    expect(container.querySelector('.count-up-final')).toHaveTextContent('₹12,345');
   });
 
   it('keeps the final value readable while counting, then settles on it', () => {
@@ -58,7 +57,10 @@ describe('CountUp', () => {
     expect(container.querySelector('.count-up-live')).toHaveTextContent('₹0');
     expect(container.querySelector('.count-up-final')).toHaveTextContent('₹12,345');
 
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     showAll();
+    act(() => vi.advanceTimersByTime(250)); // the short pause before counting
+    vi.useRealTimers();
     act(() => frames.shift()(performance.now() + 10_000)); // jump past the end of the animation
     expect(container.querySelector('.is-counting')).toBeNull();
     expect(screen.getByText('₹12,345')).toBeInTheDocument();
@@ -71,23 +73,31 @@ describe('CountUp', () => {
 });
 
 describe('Reveal', () => {
-  beforeEach(() => vi.stubGlobal('IntersectionObserver', MockIntersectionObserver));
+  beforeEach(() => {
+    vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
+    vi.stubGlobal('requestAnimationFrame', (fn) => fn());
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('never hides content that is already on screen', () => {
-    render(<Reveal data-testid="r">Hello</Reveal>); // jsdom reports top = 0, i.e. in view
-    expect(screen.getByTestId('r')).not.toHaveClass('reveal');
-  });
-
-  it('fades in content below the fold once it scrolls into view', () => {
-    const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({ top: 5000 });
-    render(<Reveal data-testid="r">Below</Reveal>);
+  it('slides content in when it comes into view, on arrival too', () => {
+    render(<Reveal data-testid="r">Hello</Reveal>);
     expect(screen.getByTestId('r')).toHaveClass('reveal');
     showAll();
     expect(screen.getByTestId('r')).toHaveClass('is-revealed');
-    rect.mockRestore();
+  });
+
+  it('staggers elements that appear together', () => {
+    render(
+      <>
+        <Reveal data-testid="a">A</Reveal>
+        <Reveal data-testid="b">B</Reveal>
+      </>,
+    );
+    showAll();
+    const delay = (id) => parseInt(screen.getByTestId(id).style.getPropertyValue('--reveal-delay'), 10);
+    expect(delay('b')).toBeGreaterThan(delay('a'));
   });
 
   it('does nothing without IntersectionObserver', () => {

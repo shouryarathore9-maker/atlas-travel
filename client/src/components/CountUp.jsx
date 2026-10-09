@@ -7,13 +7,15 @@ const roundTo = (n, decimals) => {
 };
 const easeOut = (t) => 1 - (1 - t) ** 3;
 
-// A number that counts up (ease-out, ~700ms) the first time it scrolls into view, and glides from the
+// A number that counts up from zero (ease-out, ~1.2 s, after a short pause so the eye lands on it) the
+// first time it is on screen, and glides from the
 // old to the new value when it changes later. Re-renders with the same value do nothing.
 // - `format` is the same formatter the page used before (e.g. formatPrice), so the text is identical.
 // - The final value is always in the DOM and readable by screen readers; the moving number is
 //   aria-hidden and drawn over the (invisible) final value, so the width never jumps.
-// - Reduced motion, no IntersectionObserver (or no JS) → the final value, plain.
-export default function CountUp({ value, format = String, decimals = 0, duration = 700, className = '' }) {
+// - No IntersectionObserver (or no JS) → the final value, plain. The device's reduce-motion setting is
+//   deliberately not consulted (owner's choice, prd.md → Decisions #36).
+export default function CountUp({ value, format = String, decimals = 0, duration = 1200, delay = 200, className = '' }) {
   const ref = useRef(null);
   const onScreen = useRef(null); // the number currently drawn (null until it has counted once)
   const [counting, setCounting] = useState(null); // in-between number while animating; null = final value
@@ -48,7 +50,14 @@ export default function CountUp({ value, format = String, decimals = 0, duration
     if (onScreen.current === null) {
       // First appearance: hold at zero (before paint) and count once it is on screen.
       setCounting(0);
-      stop = observeOnce(el, () => run(0));
+      let wait = 0;
+      const cancel = observeOnce(el, () => {
+        wait = window.setTimeout(() => run(0), delay);
+      });
+      stop = () => {
+        cancel();
+        window.clearTimeout(wait);
+      };
     } else if (onScreen.current !== value) {
       run(onScreen.current);
     }
@@ -56,7 +65,7 @@ export default function CountUp({ value, format = String, decimals = 0, duration
       stop();
       cancelAnimationFrame(frame);
     };
-  }, [value, finite, decimals, duration]);
+  }, [value, finite, decimals, duration, delay]);
 
   const final = format(value);
   if (counting === null) {

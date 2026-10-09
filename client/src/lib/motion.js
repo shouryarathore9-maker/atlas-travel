@@ -1,14 +1,9 @@
 // Shared helpers for the small motion effects (scroll reveals, count-up numbers). Every effect is
-// progressive enhancement: without IntersectionObserver, or with reduced motion, content shows as-is.
+// progressive enhancement: without IntersectionObserver, content shows as-is.
 
-export const prefersReducedMotion = () =>
-  typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-export const canAnimate = () =>
-  typeof window !== 'undefined' &&
-  typeof window.IntersectionObserver === 'function' &&
-  typeof window.requestAnimationFrame === 'function' &&
-  !prefersReducedMotion();
+// The owner chose motion for everyone: the device's "reduce motion" setting is deliberately not
+// consulted (prd.md → Decisions #36).
+export const canAnimate = () => typeof window !== 'undefined' && typeof window.IntersectionObserver === 'function' && typeof window.requestAnimationFrame === 'function';
 
 // One observer per root margin for the whole page; each element's callback runs once, the first
 // time it is on screen. Reveals use a small negative bottom margin (they start just inside the
@@ -44,5 +39,3 @@ export function observeOnce(el, onVisible, rootMargin = '0px') {
   };
 }
 
-// True when the element's top edge is already inside the viewport (content seen on load is never hidden).
-export const isOnScreen = (el) => el.getBoundingClientRect().top < window.innerHeight;

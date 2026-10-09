@@ -660,11 +660,6 @@
 .clickable-card:active {
   border-color: #c9b797;
 }
-@media (prefers-reduced-motion: reduce) {
-  .clickable-card:hover {
-    transform: none;
-  }
-}
 .hotel-card-image {
   aspect-ratio: 4 / 3;
 }
@@ -1192,11 +1187,6 @@
   .stay-card-price {
     flex-direction: column;
     gap: 0;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .stay-card:hover {
-    transform: none;
   }
 }
 
@@ -1975,14 +1965,6 @@
   68% { transform: rotate(4deg); }
   82% { transform: rotate(-2deg); }
   100% { transform: rotate(0); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .bell-btn.is-ringing svg {
-    animation: bell-fade 0.9s ease 1;
-  }
-  @keyframes bell-fade {
-    50% { opacity: 0.4; }
-  }
 }
 .bell-actions {
   gap: var(--space-3);

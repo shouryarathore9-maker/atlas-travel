@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import CountUp from '../components/CountUp.jsx';
+import Reveal from '../components/Reveal.jsx';
 import Icon from '../components/Icon.jsx';
 import Lightbox from '../components/Lightbox.jsx';
 import PriceSummary from '../components/PriceSummary.jsx';
@@ -175,7 +176,7 @@ function HotelBooking({ data, stay }) {
         <div className="detail-main">
           {hotel.description && <p className="lede">{hotel.description}</p>}
 
-          <section className="detail-section" aria-labelledby="amenities-heading">
+          <Reveal as="section" className="detail-section" aria-labelledby="amenities-heading">
             <h2 id="amenities-heading">Amenities</h2>
             <ul className="amenity-list">
               {hotel.amenities.map((a) => (
@@ -184,7 +185,7 @@ function HotelBooking({ data, stay }) {
                 </li>
               ))}
             </ul>
-          </section>
+          </Reveal>
 
           <section className="detail-section" aria-labelledby="rooms-heading">
             <h2 id="rooms-heading">Choose your room</h2>
@@ -194,7 +195,7 @@ function HotelBooking({ data, stay }) {
                 const problem = problemFor(r);
                 const maxRooms = Math.max(1, Math.min(8, r.roomsAvailable + 2));
                 return (
-                  <article key={r.name} className={`room-card ${selected?.room === r.name ? 'is-selected' : ''}`}>
+                  <Reveal as="article" key={r.name} className={`room-card ${selected?.room === r.name ? 'is-selected' : ''}`}>
                     <div className="room-card-main">
                       <h3>{r.name}</h3>
                       <p className="small">
@@ -270,7 +271,7 @@ function HotelBooking({ data, stay }) {
                         );
                       })}
                     </div>
-                  </article>
+                  </Reveal>
                 );
               })}
             </div>

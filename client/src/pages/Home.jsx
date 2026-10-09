@@ -84,16 +84,16 @@ export default function Home() {
         <div className="container">
           <OffersToday />
 
-          <Reveal as="section" className="section" id="destinations" aria-labelledby="featured-heading">
-            <div className="spread section-head">
+          <section className="section" id="destinations" aria-labelledby="featured-heading">
+            <Reveal className="spread section-head">
               <h2 id="featured-heading">Featured destinations</h2>
               <button type="button" className="btn-text view-all" onClick={() => setShowAll((s) => !s)} aria-expanded={showAll}>
                 {showAll ? 'Show fewer' : 'View all'} <Icon name="arrowRight" size={16} />
               </button>
-            </div>
+            </Reveal>
             <ul className="destination-grid">
               {cities.map((city) => (
-                <li key={city.code}>
+                <Reveal as="li" key={city.code}>
                   <Link
                     to={`/hotels?${new URLSearchParams({ city: city.city, ...defaultStay })}`}
                     className="destination-card"
@@ -108,10 +108,10 @@ export default function Home() {
                     <span className="destination-name">{city.city}</span>
                     <span className="destination-blurb">{city.blurb}</span>
                   </Link>
-                </li>
+                </Reveal>
               ))}
             </ul>
-          </Reveal>
+          </section>
 
           <BestHotels stayQuery={new URLSearchParams(defaultStay).toString()} />
 
@@ -125,17 +125,17 @@ export default function Home() {
             </figure>
           </Reveal>
 
-          <Reveal as="ul" className="promise-row">
+          <ul className="promise-row">
             {PROMISES.map((p) => (
-              <li key={p.title}>
+              <Reveal as="li" key={p.title}>
                 <Icon name={p.icon} size={22} />
                 <span>
                   <strong>{p.title}</strong>
                   <span className="small muted">{p.text}</span>
                 </span>
-              </li>
+              </Reveal>
             ))}
-          </Reveal>
+          </ul>
         </div>
       </main>
     </div>

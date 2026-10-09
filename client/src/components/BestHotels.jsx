@@ -31,8 +31,8 @@ export default function BestHotels({ stayQuery }) {
   const visible = showAll ? hotels : hotels.slice(0, SHOWN);
 
   return (
-    <Reveal as="section" className="section best-hotels" id="best-hotels" aria-labelledby="best-heading">
-      <div className="spread section-head">
+    <section className="section best-hotels" id="best-hotels" aria-labelledby="best-heading">
+      <Reveal className="spread section-head">
         <div>
           <h2 id="best-heading">Best hotels</h2>
           <p className="muted">Four- and five-star stays that guests rate 4.0 or higher.</p>
@@ -42,7 +42,7 @@ export default function BestHotels({ stayQuery }) {
             {showAll ? 'Show fewer' : 'View all'} <Icon name="arrowRight" size={16} />
           </button>
         )}
-      </div>
+      </Reveal>
       {!data ? (
         <div className="stay-grid" aria-busy="true" aria-label="Loading best hotels">
           {[0, 1, 2, 3].map((i) => (
@@ -52,12 +52,12 @@ export default function BestHotels({ stayQuery }) {
       ) : (
         <ul className="stay-grid">
           {visible.map((h) => (
-            <li key={h._id}>
+            <Reveal as="li" key={h._id}>
               <StayCard hotel={h} href={`/hotels/${h._id}?${stayQuery}`} price={h.price} priceLabel="per night, from" />
-            </li>
+            </Reveal>
           ))}
         </ul>
       )}
-    </Reveal>
+    </section>
   );
 }

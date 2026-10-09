@@ -13,8 +13,8 @@ export default function OffersToday() {
   if (!data && !error) return <div className="section offers-section offers-placeholder" aria-hidden="true" />;
   if (!data?.offers?.length) return null;
   return (
-    <Reveal as="section" className="section offers-section" id="offers" aria-labelledby="offers-heading">
-      <div className="spread section-head">
+    <section className="section offers-section" id="offers" aria-labelledby="offers-heading">
+      <Reveal className="spread section-head">
         <div>
           <h2 id="offers-heading">Offers available today</h2>
           <p className="muted">One offer per booking, shown before you pay. No countdowns.</p>
@@ -22,14 +22,14 @@ export default function OffersToday() {
         <Link to="/offers" className="btn-text view-all">
           View all <Icon name="arrowRight" size={16} />
         </Link>
-      </div>
+      </Reveal>
       <ul className="offer-grid">
         {data.offers.slice(0, 4).map((o) => (
-          <li key={o._id}>
+          <Reveal as="li" key={o._id}>
             <OfferCard offer={o} />
-          </li>
+          </Reveal>
         ))}
       </ul>
-    </Reveal>
+    </section>
   );
 }
