@@ -127,36 +127,59 @@ function PricingLimits({ onSaved }) {
   );
 }
 
-// Commission rate, pricing limits and platform cancellation templates (prd.md → Workflows 26 and 32).
+const toPct = (rate) => String(Math.round(rate * 1000) / 10);
+
+// What a product default is now, and what it becomes from next month if admin changed it.
+function RateNote({ view }) {
+  return (
+    <p className="small muted">
+      Now {toPct(view.current)}%{view.upcoming && ` · ${toPct(view.upcoming.rate)}% from 1 ${view.upcoming.label}`}
+    </p>
+  );
+}
+
+// Commission defaults, pricing limits and platform cancellation templates (prd.md → Workflows 26 and 32).
 export default function AdminSettings() {
   useDocumentTitle('Admin · Settings');
-  const [rate, setRate] = useState(null);
+  const [commission, setCommission] = useState(null);
+  const [rates, setRates] = useState(null);
   const [templates, setTemplates] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [notice, setNotice] = useState(null);
-  const [state, setState] = useState({ busy: false, error: null });
+  const [state, setState] = useState({ busy: false, error: null, fields: {} });
+
+  const showCommission = (c) => {
+    setCommission(c);
+    setRates({ flight: toPct(c.flight.upcoming?.rate ?? c.flight.current), hotel: toPct(c.hotel.upcoming?.rate ?? c.hotel.current) });
+  };
 
   useEffect(() => {
     Promise.all([adminApi.commission(), adminApi.templates()])
       .then(([c, t]) => {
-        setRate(String(Math.round(c.rate * 1000) / 10));
+        showCommission(c);
         setTemplates(t.templates);
       })
       .catch(setLoadError);
   }, []);
 
   if (loadError) return <ErrorState error={loadError} />;
-  if (rate === null) return <Spinner />;
+  if (rates === null) return <Spinner />;
+
+  const max = toPct(commission.limits.max);
+  const fieldError = (v) => (v === '' || Number.isNaN(Number(v)) || Number(v) < 0 || Number(v) > Number(max) ? `Between 0% and ${max}%` : null);
 
   async function saveRate(e) {
     e.preventDefault();
-    setState({ busy: true, error: null });
+    const fields = { flight: fieldError(rates.flight), hotel: fieldError(rates.hotel) };
+    if (fields.flight || fields.hotel) return setState({ busy: false, error: null, fields });
+    setState({ busy: true, error: null, fields: {} });
     try {
-      await adminApi.saveCommission(Number(rate) / 100);
-      setNotice(`Commission set to ${rate}%. It applies to statements created from now on.`);
-      setState({ busy: false, error: null });
+      const saved = await adminApi.saveCommission({ flight: Number(rates.flight) / 100, hotel: Number(rates.hotel) / 100 });
+      showCommission(saved);
+      setNotice(`Commission saved. Changes apply from 1 ${saved.appliesFrom.label}; statements already issued don’t change.`);
+      setState({ busy: false, error: null, fields: {} });
     } catch (err) {
-      setState({ busy: false, error: err.message });
+      setState({ busy: false, error: err.message, fields: {} });
     }
   }
 
@@ -170,11 +193,21 @@ export default function AdminSettings() {
       )}
       <form className="card" onSubmit={saveRate} noValidate>
         <h2 className="h4">Commission</h2>
-        <p className="small muted">One rate for every supplier. Each statement stores the rate it used, so a change never rewrites history.</p>
+        <p className="small muted">
+          A default rate for all airlines and one for all hotels. A different rate for one supplier is set on the Suppliers page. Changes apply from 1 {commission.appliesFrom.label}; each statement stores the rate it used, so history never changes.
+        </p>
+        {state.error && <p className="field-error" role="alert">{state.error}</p>}
         <div className="row filter-row">
-          <Field label="Commission (%)" type="number" step="0.5" min="0" max="50" value={rate} onChange={(e) => setRate(e.target.value)} error={state.error} />
-          <button type="submit" className="btn btn-primary btn-sm" disabled={state.busy}>
-            {state.busy ? 'Saving…' : 'Save rate'}
+          <div>
+            <Field label="Airlines (%)" type="number" step="0.1" min="0" max={max} value={rates.flight} onChange={(e) => setRates((r) => ({ ...r, flight: e.target.value }))} error={state.fields.flight} />
+            <RateNote view={commission.flight} />
+          </div>
+          <div>
+            <Field label="Hotels (%)" type="number" step="0.1" min="0" max={max} value={rates.hotel} onChange={(e) => setRates((r) => ({ ...r, hotel: e.target.value }))} error={state.fields.hotel} />
+            <RateNote view={commission.hotel} />
+          </div>
+          <button type="submit" className="btn btn-primary btn-sm" disabled={state.busy} aria-busy={state.busy || undefined}>
+            {state.busy ? 'Saving…' : 'Save rates'}
           </button>
         </div>
       </form>

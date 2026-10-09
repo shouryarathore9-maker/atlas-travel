@@ -4,6 +4,7 @@ import Hotel from '../models/Hotel.js';
 import Review from '../models/Review.js';
 import Supplier from '../models/Supplier.js';
 import { roomFits } from '../services/bookingService.js';
+import { inventoryFor, roomAvailability, stayNights } from '../services/inventory.js';
 import { hotelStay } from '../services/pricing.js';
 import { track } from '../services/analytics.js';
 import { getPricingLimits } from '../services/pricingLimits.js';
@@ -51,11 +52,11 @@ async function suppliersFor(hotels) {
   return Object.fromEntries(suppliers.map((s) => [String(s._id), s]));
 }
 
-// Every rate plan of a room type priced for a stay (night by night, one room).
-function pricedPlans(card, room, { checkIn, checkOut, now, limits }, templates) {
+// Every rate plan of a room type priced for a stay (night by night, one room, at each night's occupancy).
+function pricedPlans(card, room, { checkIn, checkOut, now, limits, occupancy }, templates) {
   return (card.ratePlans || [])
     .map((plan) => {
-      const stay = hotelStay(card, { roomTypeName: room.name, checkIn, checkOut, now, ratePlan: plan, limits });
+      const stay = hotelStay(card, { roomTypeName: room.name, checkIn, checkOut, now, ratePlan: plan, occupancy, limits });
       if (!stay) return null;
       const template = templates[plan.templateKey];
       return {
@@ -91,18 +92,22 @@ export async function searchHotels(req, res) {
     });
   }
   const candidates = await Hotel.find({ city: new RegExp(`^${escapeRegex(q.city)}$`, 'i'), salesStopped: { $ne: true }, ...(await hiddenSupplierFilter()) }).lean();
-  const [suppliers, templates, limits] = await Promise.all([suppliersFor(candidates), loadTemplates(), getPricingLimits()]);
+  const [suppliers, templates, limits, inventory] = await Promise.all([suppliersFor(candidates), loadTemplates(), getPricingLimits(), inventoryFor(candidates)]);
   const now = Date.now();
+  const stay = stayNights(q.checkIn, q.checkOut);
 
   const available = candidates
     .map((hotel) => {
       const card = suppliers[String(hotel.supplierId)]?.rateCard;
       if (!card?.kind) return null;
-      // The cheapest room + rate plan that fits the party, as an average per night for this stay.
+      // The cheapest room + rate plan that fits the party and has enough rooms free on every night,
+      // as an average per night for this stay.
       let best = null;
       let anyFree = false;
       for (const room of hotel.roomTypes.filter((r) => roomFits(r, q))) {
-        for (const plan of pricedPlans(card, room, { ...q, now, limits }, templates)) {
+        const avail = roomAvailability(room, inventory[String(hotel._id)]?.[room.name], stay);
+        if (avail.stopped || avail.free < q.rooms) continue;
+        for (const plan of pricedPlans(card, room, { ...q, now, limits, occupancy: avail.occupancy }, templates)) {
           if (plan.freeCancellation) anyFree = true;
           if (!best || plan.avgNightly < best.plan.avgNightly) best = { room, plan };
         }
@@ -153,11 +158,12 @@ export async function getHotel(req, res) {
   const { checkIn: inDate, checkOut: outDate } = req.validated.query;
   const checkIn = inDate || addDays(todayIstString(), 1);
   const checkOut = outDate && outDate > checkIn ? outDate : addDays(checkIn, 2);
-  const [supplier, templates, reviews, limits] = await Promise.all([
+  const [supplier, templates, reviews, limits, inventory] = await Promise.all([
     hotel.supplierId ? Supplier.findById(hotel.supplierId).lean() : null,
     loadTemplates(),
     Review.find({ itemType: 'hotel', itemId: hotel._id }).sort({ createdAt: -1 }).limit(5).lean(),
     getPricingLimits(),
+    inventoryFor([hotel]),
   ]);
   if (isSuspended(supplier)) throw new HttpError(404, 'This hotel isn’t available on Atlas right now.', 'NOT_FOUND');
   const card = supplier?.rateCard?.kind ? supplier.rateCard : null;
@@ -166,7 +172,16 @@ export async function getHotel(req, res) {
   res.json({
     hotel: {
       ...hotel,
-      roomTypes: hotel.roomTypes.map((room) => ({ ...room, plans: card ? pricedPlans(card, room, { checkIn, checkOut, now, limits }, templates) : [] })),
+      // Rooms free on every night of these dates (and whether any night is stopped), priced at each night's occupancy.
+      roomTypes: hotel.roomTypes.map((room) => {
+        const avail = roomAvailability(room, inventory[String(hotel._id)]?.[room.name], stayNights(checkIn, checkOut));
+        return {
+          ...room,
+          roomsAvailable: avail.free,
+          salesStopped: avail.stopped,
+          plans: card ? pricedPlans(card, room, { checkIn, checkOut, now, limits, occupancy: avail.occupancy }, templates) : [],
+        };
+      }),
     },
     stay: { checkIn, checkOut },
     breakfastPerGuest: card?.breakfastPerGuest || 0,
@@ -193,7 +208,7 @@ export async function listFeatured(req, res) {
     .sort({ 'rating.average': -1, starRating: -1, 'rating.count': -1, name: 1 })
     .limit(limit)
     .lean();
-  const [suppliers, templates, limits] = await Promise.all([suppliersFor(hotels), loadTemplates(), getPricingLimits()]);
+  const [suppliers, templates, limits, inventory] = await Promise.all([suppliersFor(hotels), loadTemplates(), getPricingLimits(), inventoryFor(hotels)]);
   const tonight = todayIstString();
   const tomorrow = addDays(tonight, 1);
   const now = Date.now();
@@ -203,7 +218,10 @@ export async function listFeatured(req, res) {
       const card = suppliers[String(h.supplierId)]?.rateCard;
       // "From" price: tonight's price for the cheapest room and rate plan, before taxes.
       const prices = card?.kind
-        ? h.roomTypes.flatMap((room) => pricedPlans(card, room, { checkIn: tonight, checkOut: tomorrow, now, limits }, templates).map((p) => p.avgNightly))
+        ? h.roomTypes.flatMap((room) => {
+            const avail = roomAvailability(room, inventory[String(h._id)]?.[room.name], [tonight]);
+            return pricedPlans(card, room, { checkIn: tonight, checkOut: tomorrow, now, limits, occupancy: avail.occupancy }, templates).map((p) => p.avgNightly);
+          })
         : [];
       return {
         _id: h._id,

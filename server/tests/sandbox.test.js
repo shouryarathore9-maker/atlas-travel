@@ -78,7 +78,7 @@ describe('visitor sandbox', () => {
   });
 
   it('the demo traveller books the sandboxed hotel and the manager sees it; uploads are off; quotas apply', async () => {
-    const hotel = await createHotel({ starRating: 5, rating: { average: 4.7, count: 30 }, roomTypes: [{ name: 'Deluxe Room', occupancy: { adults: 2, children: 1 }, taxesAndFees: 720, roomsAvailable: 5, roomsTotal: 5 }] });
+    const hotel = await createHotel({ starRating: 5, rating: { average: 4.7, count: 30 }, roomTypes: [{ name: 'Deluxe Room', occupancy: { adults: 2, children: 1 }, taxesAndFees: 720, roomsTotal: 5 }] });
     const { visitor, res } = await startDemo({ kind: 'hotel', supplierId: String(hotel.supplierId) });
     expect(res.status, JSON.stringify(res.body)).toBe(201);
     await visitor.post('/api/sandbox/supplier/hotel/photos').set('Content-Type', 'image/png').send(Buffer.from([0x89, 0x50, 0x4e, 0x47])).expect(403);
@@ -106,7 +106,7 @@ describe('visitor sandbox', () => {
   });
 
   it('every console page of a hotel demo has something on it', async () => {
-    const hotel = await createHotel({ starRating: 5, rating: { average: 4.6, count: 12 }, roomTypes: [{ name: 'Deluxe Room', occupancy: { adults: 2, children: 1 }, taxesAndFees: 720, roomsAvailable: 12, roomsTotal: 12 }] });
+    const hotel = await createHotel({ starRating: 5, rating: { average: 4.6, count: 12 }, roomTypes: [{ name: 'Deluxe Room', occupancy: { adults: 2, children: 1 }, taxesAndFees: 720, roomsTotal: 12 }] });
     const { visitor, res } = await startDemo({ kind: 'hotel', supplierId: String(hotel.supplierId) });
     expect(res.status, JSON.stringify(res.body)).toBe(201);
     const get = async (path) => (await visitor.get(`/api/sandbox${path}`).expect(200)).body;

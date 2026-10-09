@@ -16,6 +16,7 @@ import Hotel from '../models/Hotel.js';
 import Notification from '../models/Notification.js';
 import Offer from '../models/Offer.js';
 import Payment from '../models/Payment.js';
+import RoomInventory from '../models/RoomInventory.js';
 import Sandbox, { SANDBOX_DAYS, SANDBOX_IDLE_MS, SANDBOX_LIMITS, SANDBOX_MAX_MS } from '../models/Sandbox.js';
 import Service from '../models/Service.js';
 import Statement from '../models/Statement.js';
@@ -26,13 +27,15 @@ import { currentContext, runWithContext } from '../utils/context.js';
 import { addDays, todayIstString } from '../utils/dates.js';
 import { createRng } from '../seed/generate.js';
 import { generateHistory } from '../seed/history.js';
+import { defaultView, rateFor } from './commission.js';
+import { inventoryDocs } from './inventory.js';
 import { bookingLine, istPeriod, periodLabel, periodStart, shiftPeriod, totalsOf } from './settlement.js';
 import { DEFAULT_TEMPLATES } from './templates.js';
 import { HttpError } from '../utils/httpError.js';
 
 // Every model that carries sandbox documents (the ones using the sandboxScope plugin).
 const ORPHAN_GRACE_MS = 10 * 60 * 1000;
-export const SANDBOX_MODELS = [Adjustment, AuditLog, Booking, CancellationTemplate, Config, Flight, Hotel, Notification, Offer, Payment, Service, Statement, Supplier, Ticket, User];
+export const SANDBOX_MODELS = [Adjustment, AuditLog, Booking, CancellationTemplate, Config, Flight, Hotel, Notification, Offer, Payment, RoomInventory, Service, Statement, Supplier, Ticket, User];
 
 const newId = () => new mongoose.Types.ObjectId();
 const strip = ({ _id, __v, sandboxId, sandboxExpiresAt, ...rest }) => rest; // eslint-disable-line no-unused-vars
@@ -123,13 +126,14 @@ const REQUESTS = {
 
 // Statements for the last two closed months, built from the demo's own bookings exactly as the
 // monthly job would (the older one already paid).
-function demoStatements(bookings, suppliers, rate, now) {
+function demoStatements(bookings, suppliers, rateOf, now) {
   const statements = [];
   const latest = shiftPeriod(istPeriod(now), -1);
   for (const period of [shiftPeriod(latest, -1), latest]) {
     const start = periodStart(period);
     const end = periodStart(shiftPeriod(period, 1));
     for (const supplier of suppliers) {
+      const rate = rateOf(supplier, period);
       const due = bookings.filter((b) => {
         if (String(b.supplierId) !== String(supplier._id) || b.settlement) return false;
         const when = b.status === 'confirmed' ? b.travelDates.end : b.cancellation?.cancelledAt;
@@ -265,10 +269,7 @@ export async function createSandbox({ kind, supplierId, ip, now = Date.now() }) 
     b.contact = { email: `guest${i + 1}@example.com`, phone: '9000000000' };
   });
   const payments = [...past.payments, ...upcoming.payments];
-  for (const { hotelId, roomTypeName, rooms } of upcoming.roomChanges) {
-    const room = hotels.find((h) => String(h._id) === String(hotelId))?.roomTypes.find((r) => r.name === roomTypeName);
-    if (room) room.roomsAvailable -= rooms;
-  }
+  const roomNights = inventoryDocs(hotels, bookings); // the copy's rooms booked per night
   for (const o of offers) o.redemptions += (past.offerUse[String(o._id)] || 0) + (upcoming.offerUse[String(o._id)] || 0);
 
   // Special requests: one waiting for the supplier's reply (an upcoming trip) and answered ones.
@@ -290,8 +291,12 @@ export async function createSandbox({ kind, supplierId, ip, now = Date.now() }) 
       if (payment) payment.userId = traveller._id;
     }
   }
-  const commission = configs.find((c) => c.key === 'commissionRate')?.value ?? 0.1;
-  const statements = demoStatements(bookings, suppliers, commission, now);
+  // The real commission schedule (copied into the demo's own Config), as the monthly job would apply it.
+  const legacyRate = configs.find((c) => c.key === 'commissionRate')?.value ?? 0.1;
+  const schedule = configs.find((c) => c.key === 'commission')?.value ?? { flight: [{ from: '2000-01', rate: legacyRate }], hotel: [{ from: '2000-01', rate: legacyRate }] };
+  const statements = demoStatements(bookings, suppliers, (supplier, period) => rateFor(schedule, supplier, period).rate, now);
+  const nextHotelRate = defaultView(schedule, 'hotel', now);
+  const nextFlightRate = defaultView(schedule, 'flight', now);
 
   // Three tickets in different states, and a few notifications, so the consoles aren't empty.
   const t0 = new Date(now - 26 * 3600e3);
@@ -364,7 +369,14 @@ export async function createSandbox({ kind, supplierId, ip, now = Date.now() }) 
   const audits =
     kind === 'admin'
       ? [
-          { ...actor, action: 'commission.update', target: { type: 'config', label: 'commissionRate' }, before: { rate: 0.1 }, after: { rate: commission }, at: auditAt(70) },
+          {
+            ...actor,
+            action: 'commission.update',
+            target: { type: 'config', label: 'Commission defaults' },
+            before: { flight: nextFlightRate.current, hotel: nextHotelRate.current },
+            after: { flight: nextFlightRate.upcoming?.rate ?? nextFlightRate.current, hotel: nextHotelRate.upcoming?.rate ?? nextHotelRate.current },
+            at: auditAt(70),
+          },
           { ...actor, action: 'ticket.escalate', target: { type: 'ticket', id: tickets[0]?._id, label: `Ticket ${tickets[0]?.bookingReference || ''}` }, at: auditAt(20) },
           ...statements.filter((st) => st.status === 'paid').map((st) => ({ ...actor, action: 'statement.mark_paid', supplierId: st.supplierId, target: { type: 'statement', id: st._id, label: periodLabel(st.period) }, before: { status: 'ready' }, after: { status: 'paid', paymentRef: st.paymentRef }, at: st.paidAt })),
         ]
@@ -375,7 +387,7 @@ export async function createSandbox({ kind, supplierId, ip, now = Date.now() }) 
         ];
 
   const docs =
-    suppliers.length + hotels.length + services.length + flights.length + offers.length + bookings.length + payments.length + statements.length + tickets.length + notifications.length + audits.length + templates.length + configs.length + 3;
+    suppliers.length + hotels.length + services.length + flights.length + offers.length + bookings.length + payments.length + statements.length + tickets.length + notifications.length + audits.length + templates.length + configs.length + roomNights.length + 3;
   if (docs > SANDBOX_LIMITS.docs) throw new HttpError(503, 'That demo is too large right now. Please choose another.', 'DEMO_TOO_LARGE');
 
   const sandbox = await Sandbox.create({
@@ -398,6 +410,7 @@ export async function createSandbox({ kind, supplierId, ip, now = Date.now() }) 
       await Promise.all([
         insert(Supplier, suppliers),
         insert(Hotel, hotels),
+        insert(RoomInventory, roomNights),
         insert(Service, services),
         insert(Flight, flights),
         insert(Offer, offers),

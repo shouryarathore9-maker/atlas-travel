@@ -96,6 +96,7 @@ export const supplierApi = {
     reschedule: (id, departureTime) => api(`/supplier/departures/${id}/reschedule`, { method: 'POST', body: { departureTime } }),
   },
   hotel: {
+    stopSell: (body) => api('/supplier/hotel/stop-sell', { method: 'POST', body }),
     get: (opts) => api('/supplier/hotel', opts),
     update: (body) => api('/supplier/hotel', { method: 'PUT', body }),
     uploads: (opts) => api('/supplier/hotel/photos', opts),
@@ -140,11 +141,13 @@ export const adminApi = {
   statements: (query, opts) => api('/admin/statements', { query, ...opts }),
   statement: (id, opts) => api(`/admin/statements/${id}`, opts),
   markPaid: (id, paymentRef) => api(`/admin/statements/${id}/mark-paid`, { method: 'POST', body: { paymentRef } }),
+  createAdjustment: (body) => api('/admin/adjustments', { method: 'POST', body }),
   offers: offerAdmin('/admin'),
   templates: (opts) => api('/admin/templates', opts),
   saveTemplate: (key, body) => api(`/admin/templates/${key}`, { method: 'PUT', body }),
   commission: (opts) => api('/admin/settings/commission', opts),
-  saveCommission: (rate) => api('/admin/settings/commission', { method: 'PUT', body: { rate } }),
+  saveCommission: (rates) => api('/admin/settings/commission', { method: 'PUT', body: rates }),
+  saveSupplierCommission: (id, rate) => api(`/admin/suppliers/${id}/commission`, { method: 'PUT', body: { rate } }),
   pricingLimits: (opts) => api('/admin/settings/pricing-limits', opts),
   savePricingLimits: (limits) => api('/admin/settings/pricing-limits', { method: 'PUT', body: limits }),
 };

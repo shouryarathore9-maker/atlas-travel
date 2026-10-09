@@ -10,6 +10,7 @@ import Ticket from '../models/Ticket.js';
 import User from '../models/User.js';
 import { analytics } from '../services/analytics.js';
 import { audit } from '../services/audit.js';
+import { commissionView, defaultView, getCommissionSchedule } from '../services/commission.js';
 import { HttpError } from '../utils/httpError.js';
 import { addDays, todayIstString } from '../utils/dates.js';
 import { dateString, pagination } from '../utils/query.js';
@@ -45,19 +46,22 @@ export async function listAudit(req, res) {
 }
 
 export async function listSuppliers(req, res) {
-  const suppliers = await Supplier.find({}, { name: 1, kind: 1, code: 1, status: 1, suspension: 1 }).sort({ kind: 1, name: 1 }).lean();
-  const [managers, upcoming] = await Promise.all([
+  const suppliers = await Supplier.find({}, { name: 1, kind: 1, code: 1, status: 1, suspension: 1, commissionOverrides: 1 }).sort({ kind: 1, name: 1 }).lean();
+  const [managers, upcoming, schedule] = await Promise.all([
     User.find({ supplierId: { $in: suppliers.map((s) => s._id) } }, { name: 1, email: 1, supplierId: 1 }).lean(),
     Booking.aggregate([
       { $match: { status: 'confirmed', 'travelDates.start': { $gte: new Date() }, supplierId: { $in: suppliers.map((s) => s._id) } } },
       { $group: { _id: '$supplierId', n: { $sum: 1 } } },
     ]),
+    getCommissionSchedule(),
   ]);
   const managerOf = Object.fromEntries(managers.map((m) => [String(m.supplierId), { name: m.name, email: m.email }]));
   const upcomingOf = Object.fromEntries(upcoming.map((u) => [String(u._id), u.n]));
   res.json({
-    suppliers: suppliers.map((s) => ({
+    defaults: { flight: defaultView(schedule, 'flight'), hotel: defaultView(schedule, 'hotel') },
+    suppliers: suppliers.map(({ commissionOverrides: _o, ...s }) => ({
       ...s,
+      commission: commissionView(schedule, { ...s, commissionOverrides: _o }),
       status: s.status || 'active',
       manager: managerOf[String(s._id)] || null,
       upcomingBookings: upcomingOf[String(s._id)] || 0,

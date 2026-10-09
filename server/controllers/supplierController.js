@@ -12,11 +12,12 @@ import Service from '../models/Service.js';
 import Supplier from '../models/Supplier.js';
 import { AIRCRAFT, AIRCRAFT_KEYS } from '../services/aircraft.js';
 import { audit, snapshot } from '../services/audit.js';
+import { inventoryFor, peakBooked, setStopSell, stoppedRanges, syncRoomTypes } from '../services/inventory.js';
 import { inSandbox, useSandboxQuota } from '../services/sandbox.js';
 import { materialiseDepartures, rebuildServiceDepartures, WINDOW_DAYS } from '../services/schedule.js';
 import { CITIES, HOTEL_AMENITIES, HOTEL_PHOTO_COUNT, ROOM_AMENITIES } from '../seed/data.js';
 import { distanceKm } from '../seed/generate.js';
-import { addDays, DAY_MS, todayIstString } from '../utils/dates.js';
+import { addDays, DAY_MS, lastBookableDate, todayIstString } from '../utils/dates.js';
 import { HttpError } from '../utils/httpError.js';
 import { dateString, pagination } from '../utils/query.js';
 
@@ -274,8 +275,50 @@ async function ownHotel(req) {
   return hotel;
 }
 
+// The property with each room type's nights: booked tonight, the busiest upcoming night and the
+// date ranges its sales are stopped on.
+async function withNights(hotel) {
+  const inv = (await inventoryFor([hotel]))[String(hotel._id)] || {};
+  const tonight = todayIstString();
+  const plain = typeof hotel.toObject === 'function' ? hotel.toObject() : hotel;
+  return {
+    ...plain,
+    roomTypes: plain.roomTypes.map((r) => ({
+      ...r,
+      nights: { bookedTonight: inv[r.name]?.booked?.[tonight] || 0, peak: peakBooked(inv[r.name]), stopped: stoppedRanges(inv[r.name]) },
+    })),
+  };
+}
+
 export async function getOwnHotel(req, res) {
-  res.json({ hotel: await ownHotel(req), baseRates: req.supplier.rateCard?.baseRates || {} });
+  res.json({ hotel: await withNights(await ownHotel(req)), baseRates: req.supplier.rateCard?.baseRates || {}, horizonEnd: addDays(lastBookableDate(), 30) });
+}
+
+// Stop (or resume) selling some room types for a date range (prd.md → Hotel inventory). Reservations
+// already on those nights are kept; one audit entry per action.
+export const stopSellSchema = z
+  .object({
+    rooms: z.array(z.string().trim().min(1).max(60)).min(1, 'Choose at least one room type').max(6),
+    from: dateString,
+    to: dateString,
+    stopped: z.boolean(),
+  })
+  .refine((s) => s.to >= s.from, { message: 'The last night must be on or after the first', path: ['to'] })
+  .refine((s) => s.from >= todayIstString(), { message: 'Choose tonight or a later night', path: ['from'] })
+  .refine((s) => s.to <= addDays(lastBookableDate(), 30), { message: 'Stays can only reach 90 days ahead', path: ['to'] });
+
+export async function stopSellDates(req, res) {
+  const hotel = await ownHotel(req);
+  const { rooms, from, to, stopped } = req.validated.body;
+  const unknown = rooms.find((name) => !hotel.roomTypes.some((r) => r.name === name));
+  if (unknown) throw new HttpError(400, `Unknown room type “${unknown}”`, 'VALIDATION_ERROR');
+  const nights = await setStopSell(hotel, rooms, from, to, stopped);
+  await audit(req, {
+    action: stopped ? 'hotel.stop_sell_dates' : 'hotel.resume_sell_dates',
+    target: { type: 'hotel', id: hotel._id, label: hotel.name },
+    after: { rooms, from, to, nights },
+  });
+  res.json({ hotel: await withNights(hotel) });
 }
 
 const text = (max) => z.string().trim().max(max);
@@ -322,6 +365,7 @@ export async function updateOwnHotel(req, res) {
     throw new HttpError(400, 'One of those photos isn’t one of your uploads.', 'VALIDATION_ERROR');
   }
   const existing = Object.fromEntries(hotel.roomTypes.map((r) => [r.name, r.toObject()]));
+  const beforeRooms = hotel.roomTypes.map((r) => r.toObject());
 
   // Room types with bookings can't be removed or renamed (bookings refer to them by name).
   const kept = new Set(input.roomTypes.map((r) => r.originalName).filter(Boolean));
@@ -335,6 +379,9 @@ export async function updateOwnHotel(req, res) {
     }
   }
 
+  // Never fewer rooms than are already booked on an upcoming night.
+  const applyInventory = await syncRoomTypes(hotel._id, beforeRooms, input.roomTypes);
+
   hotel.description = input.description;
   hotel.amenities = input.amenities;
   hotel.photos = input.photos;
@@ -342,13 +389,11 @@ export async function updateOwnHotel(req, res) {
   hotel.roomTypes = input.roomTypes.map(({ originalName, ...room }) => {
     const prev = originalName ? existing[originalName] : null;
     if (originalName && !prev) throw new HttpError(400, `Unknown room type “${originalName}”`, 'VALIDATION_ERROR');
-    // Changing the number of rooms moves the available counter by the same amount (never below 0).
-    const prevTotal = prev?.roomsTotal ?? prev?.roomsAvailable ?? 0;
-    const roomsAvailable = Math.max(0, (prev?.roomsAvailable ?? 0) + room.roomsTotal - (prev ? prevTotal : 0));
     const { baseRate: _rate, ...rest } = room;
-    return { ...rest, roomsAvailable };
+    return rest;
   });
   await hotel.save();
+  await applyInventory();
   // Base rates live in the rate card, keyed by room type name (renames move the key).
   const baseRates = Object.fromEntries(input.roomTypes.map((r) => [r.name, r.baseRate]));
   const rateBefore = req.supplier.rateCard?.baseRates || {};
@@ -357,5 +402,5 @@ export async function updateOwnHotel(req, res) {
     await audit(req, { action: 'rate_card.base_rates', target: { type: 'supplier', id: req.supplierId, label: hotel.name }, before: rateBefore, after: baseRates });
   }
   await audit(req, { action: 'hotel.update', target: { type: 'hotel', id: hotel._id, label: hotel.name }, before, after: snapshot(hotel, HOTEL_AUDIT_FIELDS) });
-  res.json({ hotel });
+  res.json({ hotel: await withNights(hotel) });
 }

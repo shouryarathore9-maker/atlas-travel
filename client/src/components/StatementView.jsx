@@ -5,17 +5,16 @@ const KIND = {
   cancellation_fee: 'Cancellation fee',
   supplier_cancelled: 'Cancelled by you',
   adjustment: 'Adjustment',
+  balance: 'Balance carried',
 };
 
 const signed = (n) => (n < 0 ? `−${formatPrice(-n)}` : formatPrice(n));
 const pct = (rate) => `${Math.round(rate * 1000) / 10}%`;
 
 export function StatementStatus({ statement }) {
-  return statement.status === 'paid' ? (
-    <span className="badge badge-success">Paid</span>
-  ) : (
-    <span className="badge badge-olive">Ready · awaiting payment</span>
-  );
+  if (statement.status === 'paid') return <span className="badge badge-success">Paid</span>;
+  if (statement.status === 'carried') return <span className="badge badge-muted">Nothing to pay · carried forward</span>;
+  return <span className="badge badge-olive">Ready · awaiting payment</span>;
 }
 
 // A frozen monthly settlement statement (prd.md → Settlement). `admin` adds Atlas's take; `lineAction`
@@ -44,12 +43,24 @@ export default function StatementView({ statement, queries = [], admin = false, 
           <p className="kpi-value">{formatPrice(t.commission)}</p>
           <p className="kpi-change">Refunds {formatPrice(t.refunds)}</p>
         </div>
+        {Boolean(t.adjustments || t.balance) && (
+          <div className="kpi">
+            <p className="kpi-label">Adjustments</p>
+            <p className="kpi-value">{signed((t.adjustments || 0) + (t.balance || 0))}</p>
+            <p className="kpi-change">
+              {[t.adjustments ? `Corrections ${signed(t.adjustments)}` : null, t.balance ? `Carried from last month ${signed(t.balance)}` : null].filter(Boolean).join(' · ')}
+            </p>
+          </div>
+        )}
         <div className="kpi">
           <p className="kpi-label">{admin ? 'Net owed to supplier' : 'Net owed to you'}</p>
           <p className="kpi-value">{signed(t.net)}</p>
           <p className="kpi-change">{admin ? `Atlas keeps ${signed(t.atlasTake)}` : <StatementStatus statement={statement} />}</p>
         </div>
       </div>
+      {statement.status === 'carried' && (
+        <p className="small muted">Nothing is paid for this month: {formatPrice(-t.net)} is carried to the next statement as an opening balance.</p>
+      )}
       {statement.status === 'paid' && (
         <p className="small muted">
           Paid {formatDate(statement.paidAt)} · reference {statement.paymentRef} (simulated)
@@ -97,7 +108,7 @@ export default function StatementView({ statement, queries = [], admin = false, 
                   <td>{formatDate(l.date, { year: undefined })}</td>
                   <td>
                     <strong>{l.bookingReference || '—'}</strong> <span className="small muted">{kinds[l.kind]}</span>
-                    <span className="block small muted">{l.kind === 'adjustment' ? l.note : l.description}</span>
+                    <span className="block small muted">{l.kind === 'adjustment' ? `${l.description}: ${l.note}` : l.description}</span>
                     {query && <span className="block small">Query: {query.status === 'resolved' ? (query.resolution?.kind === 'adjustment' ? `adjustment ${signed(query.resolution.amount)}` : 'no change') : 'open'}</span>}
                   </td>
                   <td className="num">{l.gross ? formatPrice(l.gross) : '—'}</td>

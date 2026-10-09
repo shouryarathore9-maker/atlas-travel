@@ -9,7 +9,11 @@ import { useAsync } from '../../hooks/useAsync.js';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle.js';
 import { formatDate, formatPrice } from '../../lib/format.js';
 
-// Monthly settlement statements (prd.md → Supplier console → Statements; story #37).
+const pct = (rate) => `${Math.round(rate * 1000) / 10}%`;
+const signed = (n) => (n < 0 ? `−${formatPrice(-n)}` : formatPrice(n));
+
+// Monthly settlement statements (prd.md → Supplier console → Statements; story #37). The manager sees
+// their own commission rate here, read-only, including a change admin has scheduled for next month.
 export function Statements() {
   const { supplier } = useOutletContext();
   useDocumentTitle(`${supplier.name} · Statements`);
@@ -21,6 +25,30 @@ export function Statements() {
         One statement per month, created on the 1st for the month before: trips that finished, cancellation fees you kept, and any adjustments. Statements never change once
         created — if a line looks wrong, open it and query the line.
       </p>
+      {data && (
+        <p className="small">
+          Your commission: <strong>{pct(data.commission.current.rate)}</strong>
+          {data.commission.upcoming && (
+            <>
+              {' '}
+              · <strong>{pct(data.commission.upcoming.rate)}</strong> from 1 {data.commission.upcoming.label}
+            </>
+          )}
+          <span className="muted"> · set by Atlas</span>
+        </p>
+      )}
+      {data && data.pendingAdjustments.length > 0 && (
+        <section className="card">
+          <h2 className="h4">Coming on your next statement</h2>
+          <ul className="small">
+            {data.pendingAdjustments.map((a) => (
+              <li key={a._id}>
+                {a.kind === 'balance' ? a.note : `${a.bookingReference ? `${a.bookingReference}: ` : ''}${a.note}`} · <strong>{signed(a.amount)}</strong>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {error && <ErrorState error={error} onRetry={reload} />}
       {!error && !data && <SkeletonList count={4} height={52} />}
       {data && data.statements.length === 0 && <EmptyState title="No statements yet">Your first statement appears on the 1st of next month.</EmptyState>}
@@ -52,7 +80,7 @@ export function Statements() {
                   <td className="num">{s.totals.lines}</td>
                   <td className="num">{formatPrice(s.totals.commission)}</td>
                   <td className="num">
-                    <strong>{formatPrice(s.totals.net)}</strong>
+                    <strong>{signed(s.totals.net)}</strong>
                   </td>
                   <td>
                     <StatementStatus statement={s} />
@@ -109,7 +137,7 @@ export function StatementDetail() {
         queries={data.queries}
         supplierKind={supplier.kind}
         lineAction={(line, query) =>
-          line.bookingReference && line.kind !== 'adjustment' ? (
+          line.bookingReference && line.kind !== 'adjustment' && line.kind !== 'balance' ? (
             query && query.status !== 'resolved' ? (
               <Link to={`/supplier/tickets/${query._id}`} className="small">
                 View query
@@ -136,7 +164,7 @@ export function StatementDetail() {
           <ul className="small">
             {data.pendingAdjustments.map((a) => (
               <li key={a._id}>
-                {a.bookingReference}: {formatPrice(a.amount)} — {a.note}
+                {a.kind === 'balance' ? a.note : `${a.bookingReference ? `${a.bookingReference}: ` : ''}${a.note}`} · <strong>{signed(a.amount)}</strong>
               </li>
             ))}
           </ul>

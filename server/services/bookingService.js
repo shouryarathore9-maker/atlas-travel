@@ -1,10 +1,10 @@
 import crypto from 'node:crypto';
 import Flight from '../models/Flight.js';
-import Hotel from '../models/Hotel.js';
 import { MEALS } from '../seed/data.js';
 import { DAY_MS, istMidnight, lastBookableDate, nightsBetween } from '../utils/dates.js';
 import { HttpError } from '../utils/httpError.js';
 import { AIRCRAFT, cabinSeats, seatLetters } from './aircraft.js';
+import { releaseRooms, reserveRooms, roomAvailability, stayNights } from './inventory.js';
 import { ENGINE_VERSION, FLIGHT_TAX_RATE, flightFare, hotelStay, INFANT_FEE } from './pricing.js';
 
 export { FLIGHT_TAX_RATE, INFANT_FEE };
@@ -147,16 +147,13 @@ export function priceFlight(flight, supplier, { fareType, travellers }, { templa
   };
 }
 
+// Whether `rooms` of a room type hold the party (capacity only; availability is per night).
 export function roomFits(roomType, { adults, children, rooms }) {
-  return (
-    !roomType.salesStopped &&
-    roomType.roomsAvailable >= rooms &&
-    roomType.occupancy.adults * rooms >= adults &&
-    (roomType.occupancy.adults + roomType.occupancy.children) * rooms >= adults + children
-  );
+  return roomType.occupancy.adults * rooms >= adults && (roomType.occupancy.adults + roomType.occupancy.children) * rooms >= adults + children;
 }
 
-export function priceHotel(hotel, supplier, input, { templates, now = Date.now(), limits }) {
+// `inventory` is the hotel's { [roomTypeName]: RoomInventory } (services/inventory.js).
+export function priceHotel(hotel, supplier, input, { templates, now = Date.now(), limits, inventory = {} }) {
   const { roomTypeName, ratePlan: planKey = 'flexible', breakfast = false, rooms, checkIn, checkOut, adults, children } = input;
   const room = hotel.roomTypes.find((r) => r.name === roomTypeName);
   assert(room, 'That room type is no longer offered at this hotel.');
@@ -165,13 +162,14 @@ export function priceHotel(hotel, supplier, input, { templates, now = Date.now()
   assert(nights <= 30, 'Stays are limited to 30 nights.');
   assert(istMidnight(checkIn).getTime() + DAY_MS > now, 'Check-in date is in the past.');
   assert(checkIn <= lastBookableDate(now), 'Stays can be booked up to 60 days ahead.');
-  assert(!hotel.salesStopped && !room.salesStopped, 'This hotel has stopped taking bookings for that room.', 'NOT_ON_SALE');
-  assert(room.roomsAvailable >= rooms, `Only ${room.roomsAvailable} room(s) of this type are available.`, 'SOLD_OUT');
+  const availability = roomAvailability(room, inventory[roomTypeName], stayNights(checkIn, checkOut));
+  assert(!hotel.salesStopped && !availability.stopped, 'This hotel isn’t taking bookings for that room on these dates.', 'NOT_ON_SALE');
+  assert(availability.free >= rooms, availability.free ? `Only ${availability.free} room(s) of this type are free on all your nights.` : 'This room type is fully booked on your dates.', 'SOLD_OUT');
   assert(roomFits(room, { adults, children, rooms }), 'These rooms cannot hold your whole party. Add rooms or pick a larger room type.');
 
   const plan = (supplier.rateCard?.ratePlans || []).find((p) => p.key === planKey);
   assert(plan, 'That rate plan isn’t offered.');
-  const stay = hotelStay(supplier.rateCard, { roomTypeName, checkIn, checkOut, now, ratePlan: plan, limits });
+  const stay = hotelStay(supplier.rateCard, { roomTypeName, checkIn, checkOut, now, ratePlan: plan, occupancy: availability.occupancy, limits });
   assert(stay, 'This room has no rate set. Please choose another room.', 'MISCONFIGURED');
   const template = templates[plan.templateKey];
   assert(template, 'This rate plan’s cancellation terms are missing.', 'MISCONFIGURED');
@@ -225,7 +223,8 @@ export function ticketNumber(airlineCode, bookingId, index) {
 const seatsOf = (booking) => booking.travellers.map((t) => t.seat).filter(Boolean);
 const payingCount = (booking) => booking.travellers.filter((t) => t.ageCategory !== 'infant').length;
 
-// Atomic, conditional update so two people can never book the same seat, the last seat or the last room.
+// Atomic, conditional update so two people can never book the same seat, the last seat or the last room
+// (hotels: every night of the stay at once — services/inventory.js).
 export async function reserveInventory(booking) {
   if (booking.type === 'flight') {
     const cabin = booking.selection.cabin;
@@ -242,12 +241,7 @@ export async function reserveInventory(booking) {
     );
     if (!result.modifiedCount) throw new HttpError(409, 'Someone just booked one of those seats. Please choose again.', 'INVENTORY_CHANGED');
   } else {
-    const result = await Hotel.updateOne(
-      { _id: booking.itemId, roomTypes: { $elemMatch: { name: booking.selection.roomTypeName, roomsAvailable: { $gte: booking.selection.rooms } } } },
-      { $inc: { 'roomTypes.$[room].roomsAvailable': -booking.selection.rooms } },
-      { arrayFilters: [{ 'room.name': booking.selection.roomTypeName }] },
-    );
-    if (!result.modifiedCount) throw new HttpError(409, 'Those rooms were just booked. Please choose again.', 'INVENTORY_CHANGED');
+    await reserveRooms(booking);
   }
 }
 
@@ -259,11 +253,7 @@ export async function releaseInventory(booking) {
       { $inc: { [`cabins.${cabin}.sold`]: -payingCount(booking) }, $pull: { 'seatMap.unavailableSeats': { $in: seatsOf(booking) } } },
     );
   } else {
-    await Hotel.updateOne(
-      { _id: booking.itemId },
-      { $inc: { 'roomTypes.$[room].roomsAvailable': booking.selection.rooms } },
-      { arrayFilters: [{ 'room.name': booking.selection.roomTypeName }] },
-    );
+    await releaseRooms(booking);
   }
 }
 

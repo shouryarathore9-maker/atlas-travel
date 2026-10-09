@@ -3,7 +3,7 @@ import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import Booking from '../models/Booking.js';
 import Flight from '../models/Flight.js';
-import Hotel from '../models/Hotel.js';
+import RoomInventory from '../models/RoomInventory.js';
 import Payment from '../models/Payment.js';
 import { computeRefund } from '../services/bookingService.js';
 import { app, createFlight, createHotel, flightBooking, hotelBooking, loggedInAgent, pay, person } from './helpers.js';
@@ -98,7 +98,8 @@ describe('mock payment → booking', () => {
     const booking = hotelBooking(hotel, { rooms: 2, adults: 3 });
     const ok = await agent.post('/api/payments/mock').send({ idempotencyKey: 'hotel-key-1', method: 'card', booking }).expect(201);
     expect(ok.body.booking.fareBreakdown.total).toBe((6000 + 720) * 2 * 2);
-    expect((await Hotel.findById(hotel._id)).roomTypes[0].roomsAvailable).toBe(0);
+    const inv = await RoomInventory.findOne({ hotelId: hotel._id, roomTypeName: 'Deluxe Room' }).lean();
+    expect(Object.values(inv.booked)).toEqual([2, 2]); // both nights of the stay, all rooms
 
     const res = await agent.post('/api/payments/mock').send({ idempotencyKey: 'hotel-key-2', method: 'card', booking }).expect(400);
     expect(res.body.error.code).toBe('SOLD_OUT');

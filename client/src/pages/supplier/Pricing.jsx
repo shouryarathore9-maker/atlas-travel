@@ -144,7 +144,7 @@ export default function Pricing() {
         setSample(
           res.rateCard.kind === 'airline'
             ? { origin: 'DEL', destination: 'BOM', date, time: '09:00', tier: 'Saver', loadPct: 30 }
-            : { roomTypeName: Object.keys(res.rateCard.baseRates)[0], checkIn: date, nights: 2, ratePlan: 'flexible' },
+            : { roomTypeName: Object.keys(res.rateCard.baseRates)[0], checkIn: date, nights: 2, ratePlan: 'flexible', occupancyPct: 30 },
         );
       })
       .catch(setLoadError);
@@ -171,7 +171,7 @@ export default function Pricing() {
   async function runPreview() {
     setPreview({ busy: true, result: null, error: null });
     try {
-      const body = isAirline ? { ...sample, loadPct: Number(sample.loadPct) } : { ...sample, nights: Number(sample.nights) };
+      const body = isAirline ? { ...sample, loadPct: Number(sample.loadPct) } : { ...sample, nights: Number(sample.nights), occupancyPct: Number(sample.occupancyPct) };
       setPreview({ busy: false, result: await supplierApi.previewRateCard(card, body), error: null });
     } catch (e) {
       setPreview({ busy: false, result: null, error: e.message });
@@ -327,6 +327,11 @@ export default function Pricing() {
             <RuleCard title="Lead time" hint="Days from booking to check-in, 0–60." rule={card.leadTime} onToggle={toggle('leadTime')}>
               <Bands rule={card.leadTime} onChange={(r) => set('leadTime', r)} path="leadTime" err={err} kind="days" max={60} />
             </RuleCard>
+            {card.occupancy && (
+              <RuleCard title="Occupancy" hint="Percent of this room type already booked that night." rule={card.occupancy} onToggle={toggle('occupancy')}>
+                <Bands rule={card.occupancy} onChange={(r) => set('occupancy', r)} path="occupancy" err={err} kind="pct" max={100} />
+              </RuleCard>
+            )}
           </>
         )}
 
@@ -389,6 +394,7 @@ export default function Pricing() {
               <option value="flexible">Flexible</option>
               <option value="nonrefundable">Non-refundable</option>
             </Field>
+            <Field label="Rooms booked (%)" type="number" min="0" max="100" value={sample.occupancyPct} onChange={(e) => setSample({ ...sample, occupancyPct: e.target.value })} />
           </div>
         )}
         <button type="button" className="btn btn-secondary btn-sm" onClick={runPreview} disabled={preview.busy}>

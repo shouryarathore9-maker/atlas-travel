@@ -105,6 +105,7 @@ export function hotelRateCardSchema(roomNames, hotelTemplateKeys) {
     dayOfWeek,
     seasons,
     leadTime: bandedRule(60, ' days'),
+    occupancy: bandedRule(100, '%'),
     ratePlans: z
       .tuple([
         z.object({ key: z.literal('flexible'), name: z.literal('Flexible'), x: multiplier, templateKey: z.enum(hotelTemplateKeys.filter((k) => k !== 'H-NONREF')) }),

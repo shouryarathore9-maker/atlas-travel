@@ -3,7 +3,6 @@
 // days), payments, departures, hotels and the daily funnel summaries — then summarised here.
 import mongoose from 'mongoose';
 import Booking from '../models/Booking.js';
-import { getCommissionRate } from '../models/Config.js';
 import DailyStat from '../models/DailyStat.js';
 import Event from '../models/Event.js';
 import Flight from '../models/Flight.js';
@@ -14,6 +13,8 @@ import Supplier from '../models/Supplier.js';
 import { CITIES } from '../seed/data.js';
 import { currentContext } from '../utils/context.js';
 import { addDays, DAY_MS, istMidnight, todayIstString } from '../utils/dates.js';
+import { istPeriod, periodStart } from '../utils/periods.js';
+import { getCommissionSchedule, rateFor } from './commission.js';
 import { bookingLine } from './settlement.js';
 
 const cityOf = Object.fromEntries(CITIES.map((c) => [c.code, c.city]));
@@ -55,19 +56,44 @@ const PROJECTION = {
   bookingReference: 1,
 };
 
-// Commission exactly as on statements: the statement's stored rate, or today's rate if not settled yet.
+// Commission exactly as on statements: the statement's stored rate; for bookings not settled yet, the
+// supplier's rate (own override or product default) for the month the booking will be settled in.
 async function commissionFor(bookings) {
   const statementIds = [...new Set(bookings.map((b) => b.settlement?.statementId).filter(Boolean).map(String))];
-  const [statements, current] = await Promise.all([Statement.find({ _id: { $in: statementIds } }, { commissionRate: 1 }).lean(), getCommissionRate()]);
+  const supplierIds = [...new Set(bookings.map((b) => b.supplierId).filter(Boolean).map(String))];
+  const [statements, schedule, suppliers] = await Promise.all([
+    Statement.find({ _id: { $in: statementIds } }, { commissionRate: 1 }).lean(),
+    getCommissionSchedule(),
+    Supplier.find({ _id: { $in: supplierIds } }, { kind: 1, commissionOverrides: 1 }).lean(),
+  ]);
   const rateOf = Object.fromEntries(statements.map((s) => [String(s._id), s.commissionRate]));
-  return (b) => bookingLine(b, rateOf[String(b.settlement?.statementId)] ?? current)?.commission || 0;
+  const supplierOf = Object.fromEntries(suppliers.map((s) => [String(s._id), s]));
+  const dueDate = (b) => (b.status === 'cancelled' ? b.cancellation?.cancelledAt : b.travelDates?.end);
+  const unsettledRate = (b) =>
+    rateFor(schedule, supplierOf[String(b.supplierId)] || { kind: b.type === 'flight' ? 'airline' : 'hotel' }, istPeriod(dueDate(b) || Date.now())).rate;
+  return (b) => bookingLine(b, rateOf[String(b.settlement?.statementId)] ?? unsettledRate(b))?.commission || 0;
 }
 
-function kpisFor(created, earned, commission) {
+// Adjustments count against Atlas's revenue in the month of the statement they land on (balances carried
+// from a negative month move no revenue). Returns the change to net revenue in the range.
+async function adjustmentsFor(range, { product, supplierId }) {
+  const ofKind = product && !supplierId ? await Supplier.find({ kind: product === 'flight' ? 'airline' : 'hotel' }, { _id: 1 }).lean() : null;
+  const statements = await Statement.find(
+    {
+      'totals.adjustments': { $nin: [0, null] },
+      ...(supplierId && { supplierId }),
+      ...(ofKind && { supplierId: { $in: ofKind.map((s) => s._id) } }),
+    },
+    { period: 1, 'totals.adjustments': 1 },
+  ).lean();
+  return statements.filter((s) => periodStart(s.period) >= range.start && periodStart(s.period) < range.end).reduce((sum, s) => sum - s.totals.adjustments, 0);
+}
+
+function kpisFor(created, earned, commission, adjustments = 0) {
   const bookings = created.length;
   const gbv = created.reduce((s, b) => s + gross(b), 0);
   const completed = earned.filter((b) => b.status === 'confirmed');
-  const net = earned.reduce((s, b) => s + commission(b), 0);
+  const net = earned.reduce((s, b) => s + commission(b), 0) + adjustments;
   const completedGross = completed.reduce((s, b) => s + gross(b), 0);
   return { bookings, gbv, netRevenue: net, takeRate: ratio(net, completedGross), avgBookingValue: ratio(gbv, bookings) };
 }
@@ -127,10 +153,14 @@ export async function analytics({ from, to, product, supplierId: id }) {
   const created = (range) => Booking.find({ ...scope, createdAt: { $gte: range.start, $lt: range.end } }, PROJECTION).lean();
   const earned = (range) => Booking.find({ ...scope, ...earnedFilter(range.start, range.end) }, PROJECTION).lean();
   const [cur, prev, curEarned, prevEarned] = await Promise.all([created(p.current), created(p.previous), earned(p.current), earned(p.previous)]);
-  const commission = await commissionFor([...curEarned, ...prevEarned]);
+  const [commission, curAdjustments, prevAdjustments] = await Promise.all([
+    commissionFor([...curEarned, ...prevEarned]),
+    adjustmentsFor(p.current, { product, supplierId }),
+    adjustmentsFor(p.previous, { product, supplierId }),
+  ]);
 
   // ---- Overview
-  const kpis = { current: kpisFor(cur, curEarned, commission), previous: kpisFor(prev, prevEarned, commission) };
+  const kpis = { current: kpisFor(cur, curEarned, commission, curAdjustments), previous: kpisFor(prev, prevEarned, commission, prevAdjustments) };
   const cancelled = cur.filter((b) => b.status === 'cancelled');
   const refundsIssued = await Booking.aggregate([
     { $match: { ...scope, status: 'cancelled', 'cancellation.cancelledAt': { $gte: p.current.start, $lt: p.current.end } } },

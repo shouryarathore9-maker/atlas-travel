@@ -4,13 +4,14 @@ import { sandboxScope } from './plugins/sandboxScope.js';
 const { ObjectId } = mongoose.Schema.Types;
 
 // A supplier's frozen monthly settlement statement (prd.md → Settlement). Lines never change after
-// creation; only `status`, `paidAt`, `paymentRef` and `paidBy` are set later (mark as paid).
+// creation; only `status`, `paidAt`, `paymentRef` and `paidBy` are set later (mark as paid). A statement
+// whose net is below zero is 'carried': nothing is paid and the shortfall opens the next statement.
 const lineSchema = new mongoose.Schema(
   {
     bookingId: { type: ObjectId, default: null },
     adjustmentId: { type: ObjectId, default: null },
     bookingReference: { type: String, default: null },
-    kind: { type: String, enum: ['completed', 'cancellation_fee', 'supplier_cancelled', 'adjustment'], required: true },
+    kind: { type: String, enum: ['completed', 'cancellation_fee', 'supplier_cancelled', 'adjustment', 'balance'], required: true },
     date: Date, // completed: arrival / check-out; cancellations: when cancelled; adjustments: when resolved
     description: String,
     funder: { type: String, default: null }, // the offer's funder, if any
@@ -33,6 +34,8 @@ const totals = {
   discountSupplier: Number,
   refunds: Number,
   commission: Number,
+  adjustments: Number, // adjustment lines (net owed only)
+  balance: Number, // carried from a previous month (≤ 0)
   net: Number,
   atlasTake: Number,
 };
@@ -43,7 +46,7 @@ const statementSchema = new mongoose.Schema({
   commissionRate: { type: Number, required: true },
   lines: [lineSchema],
   totals,
-  status: { type: String, enum: ['ready', 'paid'], default: 'ready' },
+  status: { type: String, enum: ['ready', 'paid', 'carried'], default: 'ready' },
   paidAt: { type: Date, default: null },
   paymentRef: { type: String, default: null },
   paidBy: { type: String, default: null },

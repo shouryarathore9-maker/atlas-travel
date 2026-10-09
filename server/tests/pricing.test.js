@@ -159,14 +159,18 @@ describe('cancellation templates and commission (admin)', () => {
     await admin.put('/api/admin/templates/H-NONREF').send({ name: 'Non-refundable', freeWindow: { unit: 'days', value: 2 } }).expect(400);
   });
 
-  it('only admin changes the commission rate', async () => {
+  it('only admin changes the commission defaults', async () => {
     const admin = await loggedInAgent({ role: 'admin' });
-    expect((await admin.get('/api/admin/settings/commission').expect(200)).body.rate).toBe(0.1);
-    await admin.put('/api/admin/settings/commission').send({ rate: 0.12 }).expect(200);
-    await admin.put('/api/admin/settings/commission').send({ rate: 0.9 }).expect(400);
+    const before = (await admin.get('/api/admin/settings/commission').expect(200)).body;
+    expect(before).toMatchObject({ flight: { current: 0.1, upcoming: null }, hotel: { current: 0.1, upcoming: null }, limits: { min: 0, max: 0.3 } });
+    const saved = (await admin.put('/api/admin/settings/commission').send({ flight: 0.05, hotel: 0.15 }).expect(200)).body;
+    expect(saved.flight).toMatchObject({ current: 0.1, upcoming: { rate: 0.05 } });
+    await admin.put('/api/admin/settings/commission').send({ flight: 0.31, hotel: 0.1 }).expect(400);
+    await admin.put('/api/admin/settings/commission').send({ flight: -0.01, hotel: 0.1 }).expect(400);
     const { agent } = await supplierWithManager('airline');
-    await agent.put('/api/admin/settings/commission').send({ rate: 0 }).expect(403);
-    expect((await AuditLog.findOne({ action: 'commission.update' })).after).toEqual({ rate: 0.12 });
+    await agent.put('/api/admin/settings/commission').send({ flight: 0, hotel: 0 }).expect(403);
+    const entry = await AuditLog.findOne({ action: 'commission.update' }).lean();
+    expect(entry).toMatchObject({ actorRole: 'admin', before: { flight: 0.1, hotel: 0.1 }, after: { flight: 0.05, hotel: 0.15 } });
   });
 });
 

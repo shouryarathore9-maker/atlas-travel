@@ -7,11 +7,15 @@ import { adminApi } from '../../api/resources.js';
 import { useAsync } from '../../hooks/useAsync.js';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle.js';
 
+const MAX_LINES = 5;
+const emptyLine = () => ({ amount: '', note: '' });
+const signedInr = (n) => `${n < 0 ? '−' : ''}₹${Math.abs(n).toLocaleString('en-IN')}`;
+
 export default function AdminTicket() {
   const { id } = useParams();
   const { data, error, reload, setData } = useAsync((signal) => adminApi.ticket(id, { signal }), [id]);
   const [state, setState] = useState({ busy: false, error: null });
-  const [resolution, setResolution] = useState({ outcome: 'no_change', amount: '', note: '' });
+  const [resolution, setResolution] = useState({ outcome: 'no_change', note: '', lines: [emptyLine()] });
   useDocumentTitle('Admin · Ticket');
   if (error) return <ErrorState error={error} onRetry={error.status === 404 ? undefined : reload} title={error.status === 404 ? 'Ticket not found' : undefined} />;
   if (!data) return <Spinner />;
@@ -24,7 +28,9 @@ export default function AdminTicket() {
       setData({ ticket: { ...res.ticket, supplierName: t.supplierName } });
       setState({ busy: false, error: null });
     } catch (err) {
-      setState({ busy: false, error: err.details?.[0]?.message || err.message });
+      const detail = err.details?.[0];
+      const line = /^adjustments\.(\d+)/.exec(detail?.path || '');
+      setState({ busy: false, error: detail ? `${line ? `Line ${Number(line[1]) + 1}: ` : ''}${detail.message}` : err.message });
     }
   }
 
@@ -35,7 +41,9 @@ export default function AdminTicket() {
       adminApi.resolveQuery(id, {
         outcome: resolution.outcome,
         note: resolution.note.trim(),
-        ...(resolution.outcome === 'adjustment' && { amount: Number(resolution.amount) }),
+        ...(resolution.outcome === 'adjustment' && {
+          adjustments: resolution.lines.map((l) => ({ amount: l.amount === '' ? undefined : Number(l.amount), note: l.note.trim() })),
+        }),
       }),
     );
   };
@@ -59,7 +67,7 @@ export default function AdminTicket() {
       </p>
       {isQuery && t.status === 'resolved' && (
         <p className="small">
-          Resolved: {t.resolution?.kind === 'adjustment' ? `adjustment of ₹${t.resolution.amount.toLocaleString('en-IN')} on the next statement` : 'no change'} — {t.resolution?.note}
+          Resolved: {t.resolution?.kind === 'adjustment' ? `adjustment of ${signedInr(t.resolution.amount)} on the next statement` : 'no change'} — {t.resolution?.note}
         </p>
       )}
       {isQuery && t.status !== 'resolved' && (
@@ -70,13 +78,34 @@ export default function AdminTicket() {
               <option value="no_change">No change</option>
               <option value="adjustment">Adjustment on the next statement</option>
             </Field>
-            {resolution.outcome === 'adjustment' && (
-              <Field label="Amount (₹, negative to deduct)" type="number" step="1" value={resolution.amount} onChange={(e) => setResolution({ ...resolution, amount: e.target.value })} />
-            )}
           </div>
+          {resolution.outcome === 'adjustment' && (
+            <fieldset className="stack adjustment-lines">
+              <legend className="small">Adjustment lines (shown to the supplier on their next statement)</legend>
+              {resolution.lines.map((l, i) => {
+                const setLine = (patch) => setResolution((r) => ({ ...r, lines: r.lines.map((x, j) => (j === i ? { ...x, ...patch } : x)) }));
+                return (
+                  <div className="row filter-row" key={i}>
+                    <Field label={`Amount ${i + 1} (₹, negative to deduct)`} type="number" step="1" inputMode="numeric" value={l.amount} onChange={(e) => setLine({ amount: e.target.value })} />
+                    <Field label={`Reason ${i + 1}`} maxLength={300} value={l.note} onChange={(e) => setLine({ note: e.target.value })} />
+                    {resolution.lines.length > 1 && (
+                      <button type="button" className="btn-text small" onClick={() => setResolution((r) => ({ ...r, lines: r.lines.filter((_, j) => j !== i) }))}>
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+              {resolution.lines.length < MAX_LINES && (
+                <button type="button" className="btn-text small" onClick={() => setResolution((r) => ({ ...r, lines: [...r.lines, emptyLine()] }))}>
+                  + Add another line
+                </button>
+              )}
+            </fieldset>
+          )}
           <Field label="Note for the supplier" maxLength={300} value={resolution.note} onChange={(e) => setResolution({ ...resolution, note: e.target.value })} />
           {state.error && <p className="field-error small">{state.error}</p>}
-          <button type="submit" className="btn btn-primary btn-sm" disabled={state.busy}>
+          <button type="submit" className="btn btn-primary btn-sm" disabled={state.busy} aria-busy={state.busy || undefined}>
             {state.busy ? 'Saving…' : 'Resolve query'}
           </button>
         </form>

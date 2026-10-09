@@ -40,6 +40,9 @@ import { generateOffers } from './offers.js';
 import { topUpSuppliers } from './top-up.js';
 import { closeStatements, istPeriod, periodLabel, periodStart, shiftPeriod } from '../services/settlement.js';
 import { DEFAULT_TEMPLATES } from '../services/templates.js';
+import { ensureCommissionSchedule, INITIAL_DEFAULTS } from '../services/commission.js';
+import { rebuildInventory } from '../services/inventory.js';
+import RoomInventory from '../models/RoomInventory.js';
 
 // Admin and demo traveller passwords come only from server/.env (never committed): the same
 // Atlas cluster backs the public site, so a password written in this file would be public.
@@ -117,7 +120,7 @@ async function main() {
 
   const offers = generateOffers({ suppliers: [...airlineSuppliers, ...hotelSuppliers] });
 
-  const models = [Supplier, Service, Flight, Hotel, Review, Booking, Payment, Notification, AuditLog, Offer, Ticket, CancellationTemplate, Config, Photo, Statement, Adjustment, Event, DailyStat];
+  const models = [Supplier, Service, Flight, Hotel, RoomInventory, Review, Booking, Payment, Notification, AuditLog, Offer, Ticket, CancellationTemplate, Config, Photo, Statement, Adjustment, Event, DailyStat];
   await Promise.all(models.map((Model) => Model.deleteMany({})));
   await mongoose.connection.db.dropCollection('coupons').catch(() => {}); // Phase 1 stub, replaced by offers
   await Promise.all([...models, User].map((Model) => Model.syncIndexes()));
@@ -130,6 +133,8 @@ async function main() {
   await insertInChunks(Offer, offers);
   await CancellationTemplate.insertMany(DEFAULT_TEMPLATES);
   await Config.create({ key: 'commissionRate', value: DEFAULT_COMMISSION_RATE });
+  // Per-product defaults from next month (the history above keeps the legacy single rate).
+  await ensureCommissionSchedule(INITIAL_DEFAULTS);
 
   for (const { password, ...user } of DEMO_USERS) {
     await User.updateOne({ email: user.email }, { $set: { ...user, passwordHash: await bcrypt.hash(password, 10) } }, { upsert: true });
@@ -170,9 +175,8 @@ async function main() {
   for (let i = 0; i < history.bookings.length; i += 500) await Booking.insertMany(history.bookings.slice(i, i + 500), { ordered: false, timestamps: false });
   await insertInChunks(Payment, history.payments);
   await insertInChunks(DailyStat, history.dailyStats);
-  for (const { hotelId, roomTypeName, rooms } of history.roomChanges) {
-    await Hotel.updateOne({ _id: hotelId }, { $inc: { 'roomTypes.$[room].roomsAvailable': -rooms } }, { arrayFilters: [{ 'room.name': roomTypeName }] });
-  }
+  // Rooms booked per night, from every confirmed stay (services/inventory.js).
+  await rebuildInventory({ Booking, hotels });
   for (const [offerId, used] of Object.entries(history.offerUse)) {
     const offer = offers.find((o) => String(o._id) === offerId);
     if (offer.status !== 'exhausted') await Offer.updateOne({ _id: offerId }, { $inc: { redemptions: used } });

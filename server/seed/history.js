@@ -175,7 +175,7 @@ export function generateHistory({
         if (!stay) continue;
         const rooms = rng.next() < 0.85 ? 1 : 2;
         const roomKey = `${hotel._id}|${room.name}`;
-        // Upcoming stays take rooms off the live counter, never more than a third of a room type.
+        // Upcoming stays never take more than a third of a room type (on any night, roughly).
         if (upcoming && (roomsTaken.get(roomKey) || 0) + rooms > Math.floor(room.roomsTotal / 3)) continue;
         const guests = Math.min(room.occupancy.adults * rooms, rng.int(1, 3));
         const breakfast = !room.breakfastIncluded && rng.next() < 0.35 ? card.breakfastPerGuest * guests * nights : 0;
@@ -202,7 +202,6 @@ export function generateHistory({
               destination: hotel.city,
             },
             pricing: { engineVersion: ENGINE_VERSION, nights: stay.nights, avgNightly: stay.avgNightly, ratePlan: plan.key },
-            roomsReturned: !upcoming, // upcoming stays give their rooms back after check-out, like any booking
           },
           roomKey,
           rooms,

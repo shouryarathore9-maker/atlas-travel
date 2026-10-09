@@ -95,7 +95,7 @@ describe('applying an offer (workflow 20)', () => {
 
   it('first-3-bookings offers stop after three paid bookings; supplier-cancelled ones don’t count', async () => {
     await offer({ code: 'FIRST3', firstBookingsOnly: true, discountType: 'flat', value: 100, maxDiscount: null });
-    const hotel = await createHotel({ roomTypes: [{ name: 'Deluxe Room', occupancy: { adults: 2, children: 1 }, taxesAndFees: 720, roomsAvailable: 20 }] });
+    const hotel = await createHotel({ roomTypes: [{ name: 'Deluxe Room', occupancy: { adults: 2, children: 1 }, taxesAndFees: 720, roomsTotal: 20 }] });
     const agent = await loggedInAgent();
     const bookings = [];
     for (let i = 0; i < 3; i++) bookings.push((await pay(agent, hotelBooking(hotel, { checkIn: addDays(today, 5 + i), checkOut: addDays(today, 6 + i) }), { offerCode: 'FIRST3' }).expect(201)).body.booking);

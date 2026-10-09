@@ -8,9 +8,11 @@ import Hotel from '../models/Hotel.js';
 import { acquireLock, releaseLock } from '../models/JobLock.js';
 import Notification from '../models/Notification.js';
 import Review from '../models/Review.js';
-import { runDailyJob, returnHotelRooms } from '../services/dailyJob.js';
+import { runDailyJob } from '../services/dailyJob.js';
+import { rebuildInventory } from '../services/inventory.js';
+import RoomInventory from '../models/RoomInventory.js';
 import { materialiseDepartures } from '../services/schedule.js';
-import { addDays, todayIstString } from '../utils/dates.js';
+import { addDays, istMidnight, todayIstString } from '../utils/dates.js';
 import { runWithContext } from '../utils/context.js';
 import { app, createFlight, createHotel, createService, flightFixture, loggedInAgent, supplierWithManager } from './helpers.js';
 
@@ -19,9 +21,9 @@ const contact = { email: 'a@example.com', phone: '9876543210' };
 describe('sandbox scope plugin', () => {
   it('keeps real requests and sandbox requests apart', async () => {
     const sandboxId = new mongoose.Types.ObjectId();
-    const real = await Hotel.create({ name: 'Real', city: 'Delhi', starRating: 4, roomTypes: [{ name: 'R', roomsAvailable: 1 }] });
+    const real = await Hotel.create({ name: 'Real', city: 'Delhi', starRating: 4, roomTypes: [{ name: 'R', roomsTotal: 1 }] });
     const fake = await runWithContext({ sandboxId }, () =>
-      Hotel.create({ name: 'Sandbox', city: 'Delhi', starRating: 4, roomTypes: [{ name: 'R', roomsAvailable: 1 }] }),
+      Hotel.create({ name: 'Sandbox', city: 'Delhi', starRating: 4, roomTypes: [{ name: 'R', roomsTotal: 1 }] }),
     );
     expect(String(fake.sandboxId)).toBe(String(sandboxId));
 
@@ -113,7 +115,7 @@ describe('booking rules', () => {
   });
 
   it('caps upcoming hotel stays at 5 per account', async () => {
-    const hotel = await createHotel({ roomTypes: [{ name: 'Deluxe Room', occupancy: { adults: 2, children: 1 }, taxesAndFees: 600, roomsAvailable: 20 }] });
+    const hotel = await createHotel({ roomTypes: [{ name: 'Deluxe Room', occupancy: { adults: 2, children: 1 }, taxesAndFees: 600, roomsTotal: 20 }] });
     const traveller = await loggedInAgent();
     for (let i = 0; i < 5; i++) {
       const r = await traveller.post('/api/payments/mock').send(hotelBooking(hotel, `stay-key-${i}`));
@@ -208,18 +210,22 @@ describe('daily job', () => {
     expect(await Flight.exists({ _id: booked._id })).not.toBeNull();
   });
 
-  it('returns hotel rooms once a stay has ended, exactly once', async () => {
-    const hotel = await createHotel(); // Deluxe Room: 2 available
+  it('rebuilds per-night hotel inventory from confirmed stays (migration and seed), idempotently', async () => {
+    const hotel = await createHotel(); // Deluxe Room: 2 rooms
     const base = { type: 'hotel', itemId: hotel._id, selection: { roomTypeName: 'Deluxe Room', rooms: 1 }, status: 'confirmed' };
-    const past = new Date(Date.now() - 86400e3);
+    const night = (d) => istMidnight(addDays(todayIstString(), d));
     await Booking.create([
-      { ...base, userId: hotel._id, bookingReference: 'ATDONE01', travelDates: { start: new Date(Date.now() - 3 * 86400e3), end: past } },
-      { ...base, userId: hotel._id, bookingReference: 'ATSOON01', travelDates: { start: new Date(Date.now() + 86400e3), end: new Date(Date.now() + 2 * 86400e3) } },
-      { ...base, userId: hotel._id, bookingReference: 'ATSYN001', isSynthetic: true, roomsReturned: true, travelDates: { start: past, end: past } }, // past history is seeded as already returned
+      { ...base, userId: hotel._id, bookingReference: 'ATDONE01', travelDates: { start: night(-3), end: night(-1) } },
+      { ...base, userId: hotel._id, bookingReference: 'ATSOON01', travelDates: { start: night(1), end: night(2) } },
+      { ...base, userId: hotel._id, bookingReference: 'ATSOON02', travelDates: { start: night(1), end: night(3) } },
+      { ...base, userId: hotel._id, bookingReference: 'ATGONE01', status: 'cancelled', travelDates: { start: night(1), end: night(2) } },
     ]);
-    expect(await returnHotelRooms()).toBe(1);
-    expect(await returnHotelRooms()).toBe(0);
-    expect((await Hotel.findById(hotel._id)).roomTypes[0].roomsAvailable).toBe(3);
+    const hotels = await Hotel.find({}).lean();
+    expect(await rebuildInventory({ Booking, hotels })).toBe(1);
+    await rebuildInventory({ Booking, hotels });
+    const inv = await RoomInventory.findOne({ hotelId: hotel._id }).lean();
+    expect(inv.booked).toEqual({ [addDays(todayIstString(), -3)]: 1, [addDays(todayIstString(), -2)]: 1, [addDays(todayIstString(), 1)]: 2, [addDays(todayIstString(), 2)]: 1 });
+    expect(inv.total).toBe(2);
   });
 
   it('does not run twice at the same time', async () => {

@@ -1,13 +1,17 @@
 // Supplier pricing inputs and policies (prd.md → Supplier console → Pricing / Policies), plus the
-// admin's cancellation templates and commission rate. Every save is audit-logged with before/after.
+// admin's cancellation templates and commission (product defaults and per-supplier overrides). Every save
+// is audit-logged with before/after.
 import { z, ZodError } from 'zod';
 import CancellationTemplate from '../models/CancellationTemplate.js';
-import Config, { getCommissionRate } from '../models/Config.js';
+import mongoose from 'mongoose';
+import Config from '../models/Config.js';
 import Hotel from '../models/Hotel.js';
 import Service from '../models/Service.js';
 import Supplier from '../models/Supplier.js';
 import { AIRCRAFT, AIRCRAFT_KEYS, cabinSeats } from '../services/aircraft.js';
 import { audit } from '../services/audit.js';
+import { COMMISSION_LIMITS, commissionView, defaultView, getCommissionSchedule, PRODUCT_OF, rateFor, scheduleChange } from '../services/commission.js';
+import { notifySupplier } from '../services/notify.js';
 import { DEFAULT_MEALS, mealsFor } from '../services/bookingService.js';
 import { flightFare, hotelStay, routeKm } from '../services/pricing.js';
 import { getPricingLimits, limitIssues, pricingLimitsSchema } from '../services/pricingLimits.js';
@@ -17,6 +21,7 @@ import { DEFAULT_TEMPLATES, describeTemplate, loadTemplates } from '../services/
 import { CITIES } from '../seed/data.js';
 import { addDays } from '../utils/dates.js';
 import { HttpError } from '../utils/httpError.js';
+import { istPeriod, periodLabel, shiftPeriod } from '../utils/periods.js';
 import { dateString } from '../utils/query.js';
 
 const templateKeys = (kind) => DEFAULT_TEMPLATES.filter((t) => t.kind === kind).map((t) => t.key);
@@ -64,7 +69,13 @@ const flightSample = z.object({
   tier: z.string(),
   loadPct: z.number().min(0).max(100).default(30),
 });
-const hotelSample = z.object({ roomTypeName: z.string(), checkIn: dateString, nights: z.number().int().min(1).max(30), ratePlan: z.enum(['flexible', 'nonrefundable']) });
+const hotelSample = z.object({
+  roomTypeName: z.string(),
+  checkIn: dateString,
+  nights: z.number().int().min(1).max(30),
+  ratePlan: z.enum(['flexible', 'nonrefundable']),
+  occupancyPct: z.number().min(0).max(100).default(30),
+});
 
 // Prices a sample flight or stay with an unsaved rate card, so the manager sees the effect before saving.
 export async function previewRateCard(req, res) {
@@ -80,7 +91,9 @@ export async function previewRateCard(req, res) {
   }
   const s = hotelSample.parse(req.body.sample ?? {});
   const plan = card.ratePlans.find((p) => p.key === s.ratePlan);
-  const stay = hotelStay(card, { roomTypeName: s.roomTypeName, checkIn: s.checkIn, checkOut: addDays(s.checkIn, s.nights), ratePlan: plan, limits });
+  const checkOut = addDays(s.checkIn, s.nights);
+  const occupancy = Object.fromEntries(Array.from({ length: s.nights }, (_, i) => [addDays(s.checkIn, i), s.occupancyPct / 100]));
+  const stay = hotelStay(card, { roomTypeName: s.roomTypeName, checkIn: s.checkIn, checkOut, ratePlan: plan, occupancy, limits });
   if (!stay) throw new HttpError(400, 'That room has no base rate yet', 'VALIDATION_ERROR');
   res.json(stay);
 }
@@ -175,16 +188,91 @@ export async function updateTemplate(req, res) {
 
 // ---------- Commission ----------
 
+// One default rate for all airlines and one for all hotels, plus optional per-supplier overrides. A change
+// always applies from the 1st of next month (services/commission.js); suppliers whose rate changes are told.
+
+const pct = (rate) => `${Math.round(rate * 1000) / 10}%`;
+const commissionRate = z
+  .number({ error: 'Enter a rate' })
+  .min(COMMISSION_LIMITS.min, `Between ${pct(COMMISSION_LIMITS.min)} and ${pct(COMMISSION_LIMITS.max)}`)
+  .max(COMMISSION_LIMITS.max, `Between ${pct(COMMISSION_LIMITS.min)} and ${pct(COMMISSION_LIMITS.max)}`)
+  .refine((r) => Math.abs(r * 1000 - Math.round(r * 1000)) < 1e-6, 'Use at most one decimal place (e.g. 12.5%)');
+
+export const commissionSchema = z.object({ flight: commissionRate, hotel: commissionRate });
+export const overrideSchema = z.object({ rate: commissionRate.nullable() });
+
+function nextMonth(now = Date.now()) {
+  const period = shiftPeriod(istPeriod(now), 1);
+  return { period, label: periodLabel(period) };
+}
+
+function commissionPayload(schedule) {
+  return { flight: defaultView(schedule, 'flight'), hotel: defaultView(schedule, 'hotel'), limits: COMMISSION_LIMITS, appliesFrom: nextMonth() };
+}
+
+async function tellSuppliers(suppliers, before, after, period) {
+  for (const s of suppliers) {
+    const was = rateFor(before.schedule, before.supplier?.(s) ?? s, period).rate;
+    const will = rateFor(after.schedule, after.supplier?.(s) ?? s, period).rate;
+    if (was === will) continue;
+    await notifySupplier(s._id, {
+      type: 'commission.changed',
+      title: `Your commission changes to ${pct(will)} from 1 ${periodLabel(period)}`,
+      body: `It is ${pct(was)} until then. Statements already issued don’t change.`,
+      link: '/supplier/statements',
+    });
+  }
+}
+
 export async function getCommission(req, res) {
-  res.json({ rate: await getCommissionRate() });
+  res.json(commissionPayload(await getCommissionSchedule()));
 }
 
 export async function updateCommission(req, res) {
-  const { rate } = z.object({ rate: z.number().min(0).max(0.5, 'At most 50%') }).parse(req.body ?? {});
-  const before = await getCommissionRate();
-  await Config.updateOne({ key: 'commissionRate' }, { $set: { value: rate, updatedAt: new Date() } }, { upsert: true });
-  await audit(req, { action: 'commission.update', target: { type: 'config', label: 'commissionRate' }, before: { rate: before }, after: { rate } });
-  res.json({ rate });
+  const input = commissionSchema.parse(req.body ?? {});
+  const schedule = await getCommissionSchedule();
+  const next = { flight: scheduleChange(schedule.flight, input.flight), hotel: scheduleChange(schedule.hotel, input.hotel) };
+  const changed = ['flight', 'hotel'].filter((p) => JSON.stringify(next[p]) !== JSON.stringify(schedule[p]));
+  if (!changed.length) return res.json(commissionPayload(schedule));
+  await Config.updateOne({ key: 'commission' }, { $set: { value: next, updatedAt: new Date() } }, { upsert: true });
+  const { period, label } = nextMonth();
+  const rateNext = (s, p) => (defaultView(s, p).upcoming?.rate ?? defaultView(s, p).current);
+  await audit(req, {
+    action: 'commission.update',
+    target: { type: 'config', label: 'Commission defaults' },
+    before: Object.fromEntries(changed.map((p) => [p, rateNext(schedule, p)])),
+    after: { ...Object.fromEntries(changed.map((p) => [p, input[p]])), from: label },
+  });
+  const affected = await Supplier.find({ kind: { $in: changed.map((p) => (p === 'flight' ? 'airline' : 'hotel')) } }, { kind: 1, commissionOverrides: 1 }).lean();
+  await tellSuppliers(affected, { schedule }, { schedule: next }, period);
+  res.json(commissionPayload(next));
+}
+
+export async function updateSupplierCommission(req, res) {
+  if (!mongoose.isValidObjectId(req.params.id)) throw new HttpError(404, 'We could not find that supplier.', 'NOT_FOUND');
+  const supplier = await Supplier.findById(req.params.id, { name: 1, kind: 1, commissionOverrides: 1 }).lean();
+  if (!supplier) throw new HttpError(404, 'We could not find that supplier.', 'NOT_FOUND');
+  const { rate } = req.validated.body;
+  const schedule = await getCommissionSchedule();
+  const overrides = scheduleChange(supplier.commissionOverrides || [], rate);
+  const updated = { ...supplier, commissionOverrides: overrides };
+  if (JSON.stringify(overrides) !== JSON.stringify(supplier.commissionOverrides || [])) {
+    await Supplier.updateOne({ _id: supplier._id }, { $set: { commissionOverrides: overrides } });
+    const { period, label } = nextMonth();
+    const describe = (s) => {
+      const r = rateFor(schedule, s, period);
+      return { rate: r.rate, source: r.source };
+    };
+    await audit(req, {
+      action: 'commission.override',
+      target: { type: 'supplier', id: supplier._id, label: supplier.name },
+      supplierId: supplier._id,
+      before: describe(supplier),
+      after: { ...describe(updated), from: label },
+    });
+    await tellSuppliers([supplier], { schedule }, { schedule, supplier: () => updated }, period);
+  }
+  res.json({ commission: commissionView(schedule, updated), default: defaultView(schedule, PRODUCT_OF[supplier.kind]) });
 }
 
 // ---------- Platform pricing limits ----------

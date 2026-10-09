@@ -215,7 +215,6 @@ export function generateHotels({ rng = createRng(11) } = {}) {
           amenities: rng.sample(ROOM_AMENITIES, rng.int(3, 6)),
           breakfastIncluded: rng.next() < (stars === 3 ? 0.3 : 0.6),
           taxesAndFees: round(price * (price > 7500 ? 0.18 : 0.12), 10),
-          roomsAvailable: rooms,
           roomsTotal: rooms,
           // Seed-only: becomes the rate card's base rate and the flexible plan's template.
           seedBaseRate: price,

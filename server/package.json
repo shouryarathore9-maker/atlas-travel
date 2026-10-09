@@ -11,7 +11,8 @@
     "daily": "node seed/daily.js",
     "top-up": "node seed/top-up.js",
     "test": "vitest run",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "migrate:phase2b": "node seed/migrate-phase2b.js"
   },
   "dependencies": {
     "@vercel/functions": "^3.9.9",

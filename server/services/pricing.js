@@ -123,6 +123,16 @@ export function defaultAirlineRateCard(airlineName) {
 
 export const BREAKFAST_BY_STARS = { 3: 350, 4: 550, 5: 850 };
 
+// Hotel occupancy bands, like the flights' demand rule (added to existing hotel cards by the migration).
+export const DEFAULT_HOTEL_OCCUPANCY = {
+  enabled: true,
+  bands: [
+    { from: 0, to: 49, x: 1 },
+    { from: 50, to: 79, x: 1.1 },
+    { from: 80, to: 100, x: 1.25 },
+  ],
+};
+
 // baseRates: { [roomTypeName]: ₹ per night }; flexibleTemplate: the hotel's flexible terms.
 export function defaultHotelRateCard({ baseRates, starRating = 4, flexibleTemplate = 'H-FREE1' }) {
   return {
@@ -134,6 +144,8 @@ export function defaultHotelRateCard({ baseRates, starRating = 4, flexibleTempla
       enabled: true,
       list: [...festivalSeasons(1.3), ...OFF_SEASONS.map(({ name, from, to }) => ({ name, from, to, x: 0.8 }))],
     },
+    // Percent of this room type's rooms already booked that night (per-night inventory).
+    occupancy: DEFAULT_HOTEL_OCCUPANCY,
     // Days from booking to check-in.
     leadTime: {
       enabled: true,
@@ -194,13 +206,15 @@ export const tiersForCabin = (card, cabin) => (card.tiers || []).filter((t) => t
 
 // ---------- Hotels ----------
 
-export function hotelNight(card, { roomTypeName, date, now = Date.now(), ratePlan, checkIn = date, limits = DEFAULT_PRICING_LIMITS }) {
+// `occupancy` is the share (0–1) of this room type already booked that night, before this booking.
+export function hotelNight(card, { roomTypeName, date, now = Date.now(), ratePlan, checkIn = date, occupancy = 0, limits = DEFAULT_PRICING_LIMITS }) {
   const base = card.baseRates?.[roomTypeName];
   if (!base) return null;
   const season = seasonFor(card.seasons, date);
   const factors = capFactors([
     season ? { rule: `Season: ${season.name}`, x: season.x } : { rule: 'Day of week', x: dayFactor(card.dayOfWeek, date) },
     { rule: 'Lead time', x: bandFactor(card.leadTime, Math.max(0, daysBetween(istDate(now), checkIn))) },
+    { rule: 'Occupancy', x: bandFactor(card.occupancy, Math.floor(clamp(occupancy, 0, 1) * 100)) },
     { rule: `${ratePlan.name} rate`, x: ratePlan.x },
   ], limits.maxMultiplier);
   const raw = factors.reduce((p, f) => p * f.x, base);
@@ -208,12 +222,12 @@ export function hotelNight(card, { roomTypeName, date, now = Date.now(), ratePla
   return { price, base, factors, limited };
 }
 
-/** Night-by-night price of one room for a stay. */
-export function hotelStay(card, { roomTypeName, checkIn, checkOut, now = Date.now(), ratePlan, limits = DEFAULT_PRICING_LIMITS }) {
+/** Night-by-night price of one room for a stay. `occupancy` maps a night's date to its occupancy (0–1). */
+export function hotelStay(card, { roomTypeName, checkIn, checkOut, now = Date.now(), ratePlan, occupancy = {}, limits = DEFAULT_PRICING_LIMITS }) {
   const nights = [];
   for (let i = 0; i < daysBetween(checkIn, checkOut); i++) {
     const date = new Date(Date.parse(`${checkIn}T00:00:00Z`) + i * DAY_MS).toISOString().slice(0, 10);
-    const night = hotelNight(card, { roomTypeName, date, now, ratePlan, checkIn, limits });
+    const night = hotelNight(card, { roomTypeName, date, now, ratePlan, checkIn, occupancy: occupancy[date] || 0, limits });
     if (!night) return null;
     nights.push({ date, price: night.price, ...(night.limited && { limited: night.limited }) });
   }

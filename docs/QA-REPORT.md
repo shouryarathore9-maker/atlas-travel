@@ -190,3 +190,30 @@ Why this round: the owner found the travellers picker rendering as a transparent
 **Verified working (no change needed):** menu panel and every link; tabs; swap; same-city and date validation; search double-submit (one navigation); sort; Modify search; flight seat picking/moving/double-tap (36px seats, no inner scroll); offer codes (invalid / valid / remove); failed then successful payment, triple-tap Pay → one booking; cancel dialog + double-tap → one refund; help dialog; notifications panel (full width, mark all read, closes on outside tap); photo viewer (next, counter, Escape); departure Stop/Resume sales, Reschedule and Cancel dialogs (double-tap cancel → once); new service (double-tap → one); rate card preview and save; special-request reply (once); offer create/pause with confirmation; statement query dialog; hotel property save; reservation cancel; analytics filters dialog, tabs and data tables; supplier suspend/reactivate (one audit entry); ticket reply/escalate/resolve (once); mark as paid; settings saves; bookings search/detail; admin offer create. Every page 390px wide (no sideways page scroll); desktop unchanged.
 
 New: **Admin → Users** (owner's choice: read-only list) — tested at 390px and by `admin-powers.test.js`.
+
+---
+
+# Owner additions QA (9 Oct 2026): commission per product/supplier, adjustments, per-night hotel inventory, occupancy pricing, UI fixes, motion
+
+**Plan:** automated tests for every new rule, success path and main failure path (Vitest + Supertest); the CSS cascade check; the migration run twice on the dev database plus an overbooking audit; a re-seed; then an interactive pass in the browser at 1280px and 375px — open every new dialog, tap every new button, try one invalid input per form and double-click every submit; then deploy, migrate production and verify live.
+
+**Automated:** server 147 tests (new: `commission.test.js` — schedule maths, override precedence, from-next-month statements, audit/notifications, guard rail, 403/404, several lines per query, standalone adjustments, carried-forward month and its balance, analytics; `hotel-inventory.test.js` — per-night blocking and back-to-back stays, race for the last room, cancellation frees exactly its nights, date-range stop-sell keeps bookings, room count below bookings refused, occupancy pricing pure and through the API; updated booking/console/operations/foundation tests for the counter's removal). Client 38 tests (new motion tests). Lint clean; cascade check clean.
+
+**Migration (dev):** `npm run migrate:phase2b` → 48 hotels, 128 room types, 48 rate cards, commission schedule created; second run changes nothing. Audit after migration and after a re-seed: 0 nights booked above a room type's total.
+
+| Area | Checked | Result |
+|---|---|---|
+| Home search, 1280px | travellers panel over the Offers cards; adult+child+infant | Panel on top; field reads "3 travellers" (full breakdown in tooltip and for screen readers). Found: Cabin had been narrowed to "Econom▾y" — restored |
+| Results → Modify search, 1280px | same party | "3 travellers", Cabin intact |
+| Phone travellers sheet, 375px | open, + child, + infant, Done | Sheet pinned to the bottom, Done 44px tall and on screen |
+| Settings → Commission | 35% (invalid), then 6% double-clicked | Inline "Between 0% and 30%"; one save, one audit entry (old 5% → new 6%, from November) |
+| Suppliers → Commission | 45% (invalid), 4% double-clicked; 375px dialog | Inline error; one save, row shows "4% (own rate) from 1 Nov". Found: the new column pushed the table wider than the page at 1280px — moved under the supplier name |
+| Settlement → Add adjustment | empty submit, another supplier's booking, valid double-click; 375px | Field errors; "ATZZZZZZ isn't one of Kala Ghoda Rooms's bookings"; one adjustment, listed as waiting |
+| Ticket → Resolve with 2 lines | second amount empty, then double-click | Found: the error didn't say which line — now "Line 2: Enter the amount"; exactly 2 adjustments created |
+| Analytics → Supply | bar lengths | Top routes / cities / suppliers stacked full width, bars ~2× longer |
+| Hotel demo → Property | stop-sell with last night before first; valid range double-clicked; room count 0 | Inline error; "Deluxe Room: stopped 14 Oct – 16 Oct"; "You have 2 “Deluxe Room” rooms booked on 9 Oct…" (wording fixed). 375px: inputs 48px/16px, buttons 44px, no sideways scroll |
+| Hotel demo → Pricing | occupancy rule, preview 10% vs 90% booked, save double-clicked | Rule shown; ₹14,250 → ₹17,800 (×1.25); saved once |
+| Hotel demo → Statements | rate line | "Your commission: 10% · 15% from 1 November 2026 · set by Atlas" |
+| Branded loader / progress bar | page loads | Flight-path loader with status text; top bar during requests |
+
+Console: no script errors; the only console lines are the browser's log of the deliberate 400/409 responses above.

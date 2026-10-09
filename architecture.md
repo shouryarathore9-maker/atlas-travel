@@ -79,6 +79,7 @@ Phase 1 models as built, with the Phase 2 changes logged in **Phase 2 Data-Model
   salesStopped: Boolean,
   status:     'active' | 'suspended',  // admin suspension (default active)
   suspension: { reason, at, by },      // cleared on reactivation
+  commissionOverrides: [{ from: 'YYYY-MM', rate: Number | null }],  // admin's own rate for this supplier, by month; null = product default
   sandboxId, sandboxExpiresAt
 }
 ```
@@ -133,9 +134,8 @@ Prices, fare tiers, seat fees and meals are **not** stored on the flight: they c
     name, occupancy: { adults, children }, bedType, amenities: [String],
     breakfastIncluded,
     taxesAndFees,                       // fixed per room per night
-    roomsTotal,                         // for occupancy
-    roomsAvailable,                     // counter: −booking, +cancellation, +after check-out
-    salesStopped
+    roomsTotal,                         // rooms of this type, every night
+    salesStopped                        // all dates (date ranges: RoomInventory.stopSell)
   }],
   salesStopped,
   rating: { average, count },
@@ -213,7 +213,7 @@ One generic `Booking` collection with a `type` discriminator, rather than separa
 ```
 
 ### Config *(Phase 2)*
-`{ key: 'commissionRate', value: 0.10, sandboxId }` and `{ key: 'pricingLimits', value: { maxMultiplier: 2, flightFare: { min: 1000, max: 75000 }, hotelNight: { min: 500, max: 150000 } } }` (defaults in code, `DEFAULT_PRICING_LIMITS`, when the document is absent).
+`{ key: 'commission', value: { flight: [{ from: 'YYYY-MM', rate }], hotel: [...] } }` (per-product default schedules; the entry in force for a month is the last one starting on or before it — `services/commission.js`), the legacy `{ key: 'commissionRate', value: 0.10 }` (used only when no schedule exists, and for the months before the schedule's first change), and `{ key: 'pricingLimits', value: { maxMultiplier: 2, flightFare: { min: 1000, max: 75000 }, hotelNight: { min: 500, max: 150000 } } }` (defaults in code, `DEFAULT_PRICING_LIMITS`, when the document is absent).
 
 ### Notification *(Phase 2)*
 `{ userId, type, title, body, link, readAt, createdAt, sandboxId }` — TTL 90 days on `createdAt`; at most 200 per user (oldest trimmed by the daily job).
@@ -233,14 +233,27 @@ One generic `Booking` collection with a `type` discriminator, rather than separa
 ```
 TTL 365 days on `closedAt` (partial: closed/resolved only).
 
+### RoomInventory *(Phase 2 — per-night hotel inventory)*
+```
+{ hotelId, roomTypeName, total,                       // total mirrors roomTypes[].roomsTotal
+  booked:   { 'YYYY-MM-DD': Number },                 // rooms booked that night (IST)
+  stopSell: { 'YYYY-MM-DD': true },                   // nights the hotel stopped selling
+  sandboxId, sandboxExpiresAt }
+// unique (sandboxId, hotelId, roomTypeName)
+```
+Booking a stay is one conditional `updateOne`: the filter requires, for every night, `booked[night] + rooms ≤ total` (`$expr`) and `stopSell[night] ≠ true`, and the update `$inc`s every night — so the whole stay is taken atomically or not at all (`409 INVENTORY_CHANGED`). Cancelling `$inc`s the same nights back. Past nights are kept (≈ 365 small keys per room type per year), which also gives exact historical occupancy.
+
 ### Statement and Adjustment *(Phase 2)*
 ```
 Statement { supplierId, period: 'YYYY-MM', commissionRate,
-            lines: [{ bookingId, bookingReference, kind: 'completed'|'cancellation_fee'|'supplier_cancelled'|'adjustment',
+            lines: [{ bookingId, bookingReference, kind: 'completed'|'cancellation_fee'|'supplier_cancelled'|'adjustment'|'balance',
                       gross, discountPlatform, discountSupplier, refunds, commission, net, atlasTake }],
-            totals: { ... }, status: 'ready'|'paid', paidAt, paymentRef, createdAt, sandboxId }
+            totals: { ..., adjustments, balance }, status: 'ready'|'paid'|'carried', paidAt, paymentRef, createdAt, sandboxId }
             // unique (sandboxId, supplierId, period); lines ≤ 5,000 (a continuation statement beyond that)
-Adjustment { supplierId, amount, note, ticketId, statementId /* applied in */, createdAt, sandboxId }
+            // 'carried': net < 0 — nothing paid, the shortfall becomes a 'balance' adjustment on the next statement
+Adjustment { supplierId, kind: 'adjustment'|'balance', amount /* ± ₹ */, note /* reason shown to the supplier */,
+             ticketId | null, bookingReference | null, fromStatementId, createdBy, statementId /* applied in */, createdAt, sandboxId }
+            // unique (sandboxId, fromStatementId) for kind 'balance' — a statement carries its balance once
 ```
 
 ### Event and DailyStat *(Phase 2 — funnel)*
@@ -278,22 +291,24 @@ Adjustment { supplierId, amount, note, ticketId, statementId /* applied in */, c
 | GET/POST/PUT | `/api/supplier/services[/:id]` | Airline services | Airline manager |
 | GET | `/api/supplier/departures`, `/:id/passengers` | Departures, passenger list | Airline manager |
 | POST | `/api/supplier/departures/:id/{stop-sales,resume-sales,reschedule,cancel}` | Departure actions | Airline manager |
-| GET/PUT | `/api/supplier/hotel`, `/api/supplier/hotel/rooms[/:name]` | Hotel profile and room types | Hotel manager |
-| POST | `/api/supplier/hotel/{stop-sales,resume-sales}` | Hotel/room stop-sell | Hotel manager |
+| GET/PUT | `/api/supplier/hotel` | Hotel profile and room types (all-dates stop-sell flags in the body); each room type returns `nights: { bookedTonight, peak, stopped }`; a room count below an upcoming night's bookings → `409 ROOMS_BOOKED` | Hotel manager |
+| POST | `/api/supplier/hotel/stop-sell` (`{ rooms, from, to, stopped }`) | Stop or resume sales of room types for a date range (tonight … +90 days); reservations kept; one audit entry | Hotel manager |
 | GET/POST | `/api/supplier/reservations`, `/:id/cancel` | Reservations; supplier cancellation | Hotel manager |
 | GET/PUT/POST | `/api/supplier/rate-card`, `/rate-card/preview` | Rate card; preview | Manager |
 | GET/PUT | `/api/supplier/policies`; GET `/api/supplier/templates` | Policies; templates (read) | Manager |
 | GET/POST | `/api/supplier/special-requests`, `/:bookingId/reply` | Special requests | Manager |
 | GET/POST | `/api/supplier/tickets`, `/:id/messages` | Escalated tickets | Manager |
 | GET/POST/PUT | `/api/supplier/offers[/:id]`, `/:id/{pause,resume}` | Own offers | Manager |
-| GET/POST | `/api/supplier/statements[/:id]`, `/:id/lines/:ref/query` | Statements; query a line | Manager |
+| GET/POST | `/api/supplier/statements[/:id]`, `/:id/lines/:ref/query` | Statements (the list also returns the manager's `commission` view and `pendingAdjustments`); query a line | Manager |
 | GET | `/api/admin/analytics?from=&to=&product=&supplier=` | Dashboard data | Admin |
 | GET | `/api/admin/bookings`, `/:ref` | All bookings (read-only) | Admin |
-| GET/POST | `/api/admin/tickets`, `/:id/{reply,close,escalate,resolve}` | Tickets and statement queries | Admin |
+| GET/POST | `/api/admin/tickets`, `/:id/{reply,close,escalate,resolve}` | Tickets and statement queries (resolve: `{ outcome, note, adjustments: [{ amount, note }] ≤ 5 }`) | Admin |
 | GET | `/api/admin/special-requests` | Read-only list | Admin |
 | GET/POST/PUT | `/api/admin/offers[/:id]`, `/:id/{pause,resume}` | Platform offers; kill switch on any offer | Admin |
-| GET/POST | `/api/admin/statements`, `/:id/mark-paid` | Settlement | Admin |
-| GET/PUT | `/api/admin/settings/commission`, `/api/admin/settings/pricing-limits`, `/api/admin/templates[/:key]` | Commission; pricing limits; cancellation templates | Admin |
+| GET/POST | `/api/admin/statements` (also `pendingAdjustments`), `/:id/mark-paid` (`409 NOTHING_TO_PAY` when carried) | Settlement | Admin |
+| POST | `/api/admin/adjustments` (`{ supplierId, amount, note, bookingReference? }`) | Standalone adjustment for the supplier's next statement | Admin |
+| GET/PUT | `/api/admin/settings/commission` (`{ flight, hotel }`, 0–0.3), `/api/admin/settings/pricing-limits`, `/api/admin/templates[/:key]` | Commission defaults (from next month); pricing limits; cancellation templates | Admin |
+| PUT | `/api/admin/suppliers/:id/commission` (`{ rate: 0–0.3 \| null }`) | One supplier's own rate from next month (null = product default) | Admin |
 | GET/POST | `/api/admin/suppliers`, `/:id/suspend` (`{ reason }`), `/:id/reactivate` | Suppliers with manager, upcoming bookings and status; suspend/reactivate | Admin |
 | GET | `/api/admin/users?q&role&seeded`, `/api/admin/users/:id` | Accounts (read-only) with booking counts; one account with its latest bookings and tickets (no password hash) | Admin |
 | GET | `/api/admin/audit` | Audit log | Admin |
@@ -331,9 +346,9 @@ No live inventory, so realistic seed data matters:
 
 **Daily maintenance job** (`GET /api/cron/daily`, Vercel Cron once a day, `Authorization: Bearer <CRON_SECRET>`; locally `npm run daily`). One handler runs these steps in order, each idempotent, each under the shared job lock, and stops cleanly when the 300 s budget nears (leaving the rest for the next run):
 1. **Departures:** materialise missing departures of active services within the 60-day window (unique `(serviceId, date)`, at most 10 new days per run so the first catch-up never bursts); prune departures older than a day that have no bookings.
-2. **Hotel rooms:** for confirmed hotel bookings whose check-out has passed and whose rooms haven't been returned, increment `roomsAvailable` once (marked so it never repeats). Synthetic history never touches live counters.
+2. *(Removed with per-night inventory — past nights simply stop mattering; nothing is "returned".)*
 3. **Offers:** expire offers past `validTo`; mark offers at their limit exhausted; notify creators once.
-4. **Statements:** on or after the 1st (IST), close the previous month for every supplier with activity (unique per supplier and period).
+4. **Statements:** on or after the 1st (IST), close the previous month for every supplier with activity or a pending adjustment (unique per supplier and period), each at the commission in force for that month; a statement below zero is `carried` and creates its balance adjustment.
 5. **Bulk cancellations:** finish any departure with `cancellationJob.state = 'pending'`.
 6. **Reschedule windows:** mark `pending` responses past `respondBy` as kept.
 7. **Sandboxes:** delete documents of ended or expired sandboxes.
@@ -446,7 +461,8 @@ Taxes = round(12% × (fare × payingTravellers − discount)). Infant fee ₹1,5
 **Hotel night (per room):**
 ```
 base   = baseRates[roomType]
-raw    = base × (season(night) ? season.x : dayOfWeek(night)) × leadTime(days from booking date to check-in) × ratePlan.x
+raw    = base × (season(night) ? season.x : dayOfWeek(night)) × leadTime(days from booking date to check-in)
+              × occupancy(RoomInventory.booked[night] ÷ total, before this booking) × ratePlan.x
 night  = clamp(round50(clamp(raw, floor × base, ceiling × base)), limits.hotelNight.min, limits.hotelNight.max)   // factors capped at limits.maxMultiplier
 stay   = Σ nights × rooms;   breakfast = perGuest × guests × nights (room-only rooms, if added)
 taxes  = taxesAndFees × rooms × nights     (fixed; unaffected by discounts)
@@ -513,7 +529,7 @@ Changes made while building the MVP. Each is additive or a clarification; nothin
    - Added `GET /api/hotels/featured?limit=` (public) for the homepage "Best hotels" section (story #19): hotels with `starRating ≥ 4` **and** `rating.average ≥ 4.0`, sorted by guest rating, then stars, then review count; returns a "from" nightly price (cheapest room, before taxes).
    - "Similar stays" (story #18) reuses `GET /api/hotels` with the viewer's current dates/party, so no new endpoint was needed.
    - Admin also had `GET /api/admin/flights[/:id]` and `GET /api/admin/hotels[/:id]` *(removed in Phase 2)*.
-6. **Inventory is not per-date for hotels**: `roomsAvailable` is a single counter per room type (decremented on booking, restored on cancel — and, from Phase 2, after check-out). Flight seats are per flight document, since each flight is one dated departure.
+6. ~~**Inventory is not per-date for hotels**~~ *(superseded in Phase 2 by per-night `RoomInventory`, see §4 and Phase 2 deviation 33)*. Flight seats are per flight document, since each flight is one dated departure.
 7. **Folder structure** adds `server/services`, `server/utils`, `server/config`, `server/tests`, and `client/src/lib`.
 8. **Password hashing** uses `bcryptjs` (pure-JS bcrypt, same algorithm and hash format) to avoid native build tooling on Windows.
 9. **Rate limiting** — `POST /api/auth/register` and `/login` share a strict limit (30 requests / 15 min / IP). `GET /api/auth/me` and `/logout` use a separate, lenient limit (600 / 15 min), because the session check runs on every page load and must not lock users out. Counters are kept in MongoDB (see §8).
@@ -527,7 +543,7 @@ Changes made while building the MVP. Each is additive or a clarification; nothin
 Stage 1 (foundations):
 1. **Sandbox isolation is automatic, not a throwing guard.** Every API request runs in an `AsyncLocalStorage` context (`server/utils/context.js`); the `sandboxScope` Mongoose plugin adds `sandboxId = <request's sandbox or null>` to every query, aggregation and new document of a sandboxable model. A real request can't see or change sandbox data and a sandbox request can't reach real data even with a real id. A query naming a *different* sandbox throws. Code outside a request (seed, tests, the daily job) is not scoped. `bulkWrite` isn't covered by Mongoose middleware, so request code using it puts `sandboxId` in each filter itself.
 2. **Interim prices until Stage 2/3.** Departures still carry Phase 1-style `fareOptions`, `mealOptions` and a single-cabin `seatMap` (sized from the aircraft's economy cabin), generated from `Service.interim`; hotels keep `roomTypes[].price` and `cancellationPolicy`. The pricing engine (Stage 2) and cabin seat maps (Stage 3) remove them as listed in Phase 2 Data-Model Changes.
-3. **Booking** gains `roomsReturned` (hotel rooms given back after check-out, exactly once) and `isSynthetic` now.
+3. **Booking** gains `isSynthetic` now (a `roomsReturned` flag existed until per-night inventory replaced the counter; the migration removes it).
 4. **Extra endpoints:** `GET /api/notifications/unread-count` (the bell's cheap poll), `GET /api/supplier/catalogue` (airports, aircraft, amenity lists and the photo gallery for console forms), `GET /api/admin/suppliers` (audit-log filter). Supplier routes so far: overview, services CRUD, departures list + stop/resume sales, hotel property and rooms.
 5. **`MONGODB_DB`** (optional env var) selects a database other than the one in `MONGODB_URI`; local development uses `travel_app_phase2` so seeding never touches live data.
 6. **Manager accounts** are named after their supplier ("IndiGo manager"); the header shows a staff account's full name rather than a first name.
@@ -571,12 +587,20 @@ After Phase 2 QA:
 31. **Double-tap guard** (`middleware/once.js`): POST/PUT routes that create or save (help tickets and messages, services, reschedules, statement queries, offers, rate card, policies, hotel, templates, commission, pricing limits; saved travellers use an atomic conditional `$push` instead) record a hash of user + method + URL + body in a `requestonces` collection with a unique index; the same request within 10 s gets `409 DUPLICATE_SUBMIT`, which the client ignores (the first request updates the page). Entries expire via TTL; a request that ends in an error releases its entry so it can be retried at once.
 32. **Users list** (read-only): `GET /api/admin/users` and `/:id` — see the endpoint table. Seeded history accounts (`@history.atlas.invalid`) are excluded unless `seeded=true`.
 
+Owner additions after Phase 2 (prd.md → Decisions #33–#36):
+33. **Per-night hotel inventory** replaces the `roomsAvailable` counter: new `RoomInventory` collection (§4), `services/inventory.js` (`reserveRooms`/`releaseRooms`, `roomAvailability` for search/detail/payment, `syncRoomTypes` on hotel edits, `setStopSell`, `rebuildInventory`). `Hotel.roomTypes[].roomsAvailable` and `Booking.roomsReturned` are removed and the daily `hotelRooms` step is gone. The hotel detail API still returns `roomsAvailable`, now computed for the requested dates (and `salesStopped` true if any night is stopped). Sandboxes get their own inventory documents built from their generated bookings. Migration: `npm run migrate:phase2b` (idempotent) — fills a missing `roomsTotal` from the old counter plus upcoming booked rooms, rebuilds every room type's nights from confirmed stays, removes the retired fields, adds the occupancy rule to hotel rate cards, and creates the commission schedule; it also runs inside every open sandbox.
+34. **Hotel occupancy pricing:** new `occupancy` banded rule on hotel rate cards (0–100%, default 0–49 ×1.0, 50–79 ×1.1, 80–100 ×1.25), per room type and night, from the inventory before the booking; the preview takes `occupancyPct`.
+35. **Commission per product and per supplier** (`services/commission.js`): schedules by month, a change always starts next month (`scheduleChange` replaces anything later and is a no-op — which also cancels a pending change — when the value equals this month's); `rateFor(schedule, supplier, period)` = the supplier's override in force, else the product default; 0–30%. `closeStatements` charges each supplier the rate for the month being closed. Analytics: settled bookings use the statement's rate; unsettled ones use `rateFor` at the month they will settle in. Audit actions `commission.update` (before/after per product, `from`) and `commission.override` (before/after rate and source); notification `commission.changed` to each manager whose next-month rate changes.
+36. **Adjustments:** `kind`, `createdBy`; resolve takes up to 5 lines (inserted together after the atomic claim); `POST /api/admin/adjustments` for standalone ones (a booking reference must be that supplier's); an adjustment lands on the first statement created after it (`createdAt ≤` the statement's); statements total `adjustments` and `balance` separately; `net < 0` → status `carried`, mark-paid refused, and a `balance` adjustment (unique per statement) opens the next one; analytics subtract `totals.adjustments` of statements whose period starts in the range (balances excluded).
+37. **Client motion and loading** (`design.md` → Motion and feedback): `lib/progress.js` + `ProgressBar` (in-flight API calls from `api/client.js`, 150 ms delay; notification polling excluded), `CountUp`, `Reveal`/`useReveal` (one shared IntersectionObserver), `aria-busy` button spinners, a branded `Spinner`; all disabled under `prefers-reduced-motion`.
+
 ## Phase 2 Data-Model Changes (logged per AGENTS.md)
 1. **User:** `role` gains `airline_manager` and `hotel_manager`; adds `supplierId`; `savedTravellers` becomes `{ firstName, lastName, ageCategory }` (≤ 20); adds `sandboxId`.
 2. **Supplier** adds `status` and `suspension` (owner request, deviation 15).
 2a. **New collections:** `suppliers`, `services`, `offers` (replaces the unused `coupons` stub, which is dropped), `cancellationtemplates`, `configs`, `notifications`, `auditlogs`, `tickets`, `statements`, `adjustments`, `events`, `dailystats`, `sandboxes`, `photos` (hotel uploads).
 3. **Flight:** adds `supplierId`, `serviceId`, `date`, `aircraftConfig`, `cabins`, `status`, `salesStopped`, `scheduleChange`, `cancellationJob`, `checkInSeq`, `seatMap.blockedSeats`, sandbox fields; **removes** `fareOptions` (tiers, baggage and templates now come from the rate card), `mealOptions` (supplier policies) and `seatMap.rows/columns/seatPricing` (aircraft catalogue and rate card). Unique index `(serviceId, date)`.
-4. **Hotel:** adds `supplierId`, `salesStopped`, `roomTypes[].roomsTotal`, `roomTypes[].salesStopped`, sandbox fields; **removes** `roomTypes[].price` (rate card) and `roomTypes[].cancellationPolicy` (templates).
+4. **Hotel:** adds `supplierId`, `salesStopped`, `roomTypes[].roomsTotal` (now required), `roomTypes[].salesStopped`, sandbox fields; **removes** `roomTypes[].price` (rate card), `roomTypes[].cancellationPolicy` (templates) and `roomTypes[].roomsAvailable` (replaced by `RoomInventory`, deviation 33).
+4a. **RoomInventory** (new collection, deviation 33). **Supplier** adds `commissionOverrides`; **Config** adds the `commission` schedule; **Statement** adds `totals.adjustments`, `totals.balance`, status `carried` and line kind `balance`; **Adjustment** adds `kind`, `createdBy` (deviations 35–36).
 5. **Review:** `itemType` `'flight'` becomes `'service'` (reviews per service).
 6. **Booking:** adds `supplierId`, `pnr`, `selection.cabin`, `selection.ratePlan`, `selection.breakfast`, traveller `firstName`/`lastName`/`ticketNumber` and `ageCategory: 'infant'`, `specialRequest` (replaces per-traveller `specialRequests`), `fareBreakdown.infantFees`, `offer`, `pricing`, `policySnapshot.templateKey/templateName/nonRefundable`, `cancellation.by/reason/feeRetained/receiptNo/redemptionRestored`, `reschedule`, `checkIn`, `settlement`, `isSynthetic`, sandbox fields. Existing fields keep their meaning; `fareBreakdown.discounts` now holds the offer amount.
 7. **Payment:** adds `sandboxId`.

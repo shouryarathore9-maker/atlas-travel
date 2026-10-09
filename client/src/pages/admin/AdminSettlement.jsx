@@ -6,7 +6,63 @@ import { Banner, EmptyState, ErrorState, SkeletonList, Spinner } from '../../com
 import { adminApi } from '../../api/resources.js';
 import { useAsync } from '../../hooks/useAsync.js';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle.js';
-import { formatPrice } from '../../lib/format.js';
+import Modal from '../../components/Modal.jsx';
+import { formatDate, formatPrice } from '../../lib/format.js';
+
+const signed = (n) => (n < 0 ? `−${formatPrice(-n)}` : formatPrice(n));
+const blankAdjustment = { supplierId: '', amount: '', note: '', bookingReference: '' };
+
+// A standalone adjustment (no supplier query): lands on the supplier's next statement.
+function AddAdjustment({ suppliers, onClose, onSaved }) {
+  const [form, setForm] = useState(blankAdjustment);
+  const [state, setState] = useState({ busy: false, errors: {}, error: null });
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  async function save(e) {
+    e.preventDefault();
+    setState({ busy: true, errors: {}, error: null });
+    try {
+      await adminApi.createAdjustment({ ...form, amount: form.amount === '' ? undefined : Number(form.amount), bookingReference: form.bookingReference.trim() || undefined });
+      onSaved(suppliers.find((s) => s._id === form.supplierId)?.name);
+    } catch (err) {
+      const errors = err.fieldErrors || {};
+      setState({ busy: false, errors, error: Object.keys(errors).length ? null : err.message });
+    }
+  }
+
+  return (
+    <Modal
+      title="Add an adjustment"
+      onClose={onClose}
+      footer={
+        <div className="row">
+          <button type="submit" form="adjustment-form" className="btn btn-primary" disabled={state.busy} aria-busy={state.busy || undefined}>
+            {state.busy ? 'Saving…' : 'Add adjustment'}
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={state.busy}>
+            Cancel
+          </button>
+        </div>
+      }
+    >
+      <p className="small muted">For a correction Atlas found itself. It appears, with its reason, on the supplier’s next statement and changes net owed only. The supplier is notified.</p>
+      <form id="adjustment-form" className="stack" onSubmit={save} noValidate>
+        <Field label="Supplier" as="select" value={form.supplierId} onChange={set('supplierId')} error={state.errors.supplierId}>
+          <option value="">Choose a supplier</option>
+          {suppliers.map((s) => (
+            <option key={s._id} value={s._id}>
+              {s.name}
+            </option>
+          ))}
+        </Field>
+        <Field label="Amount (₹, negative to deduct)" type="number" step="1" inputMode="numeric" value={form.amount} onChange={set('amount')} error={state.errors.amount} />
+        <Field label="Reason (shown to the supplier)" maxLength={300} value={form.note} onChange={set('note')} error={state.errors.note} />
+        <Field label="Booking reference" optional maxLength={12} value={form.bookingReference} onChange={set('bookingReference')} error={state.errors.bookingReference} />
+        {state.error && <p className="field-error">{state.error}</p>}
+      </form>
+    </Modal>
+  );
+}
 
 // Every supplier's statements (prd.md → Admin console → Settlement; story #41).
 export function AdminSettlement() {
@@ -15,6 +71,8 @@ export function AdminSettlement() {
   const query = Object.fromEntries([...params].filter(([, v]) => v));
   const { data, error, reload } = useAsync((signal) => adminApi.statements(query, { signal }), [params.toString()]);
   const suppliers = useAsync((signal) => adminApi.suppliers({ signal }), []);
+  const [adding, setAdding] = useState(false);
+  const [notice, setNotice] = useState(null);
   const setFilter = (key, value) => {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value);
@@ -32,6 +90,59 @@ export function AdminSettlement() {
     <>
       <h1 className="console-h1">Settlement</h1>
       <p className="muted">Statements are created on the 1st for the month before and never change. Resolve queries from Tickets; mark a statement paid once the (simulated) payout is sent.</p>
+      {notice && (
+        <Banner tone="success">
+          <p>{notice}</p>
+        </Banner>
+      )}
+      <div className="row">
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setAdding(true)} disabled={!suppliers.data}>
+          Add adjustment
+        </button>
+      </div>
+      {adding && suppliers.data && (
+        <AddAdjustment
+          suppliers={suppliers.data.suppliers}
+          onClose={() => setAdding(false)}
+          onSaved={(name) => {
+            setAdding(false);
+            setNotice(`Adjustment added. It will appear on ${name}’s next statement.`);
+            reload();
+          }}
+        />
+      )}
+      {data && data.pendingAdjustments.length > 0 && (
+        <section className="card">
+          <h2 className="h4">Waiting for the next statement</h2>
+          <div className="table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th scope="col">Supplier</th>
+                  <th scope="col">Reason</th>
+                  <th scope="col" className="num">
+                    Amount
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.pendingAdjustments.map((a) => (
+                  <tr key={a._id}>
+                    <td>{a.supplierName}</td>
+                    <td className="small">
+                      {a.note}
+                      <span className="block muted">
+                        {[a.bookingReference, a.kind === 'balance' ? 'carried balance' : a.ticketId ? 'from a query' : `added by ${a.createdBy || 'admin'}`, formatDate(a.createdAt, { year: undefined })].filter(Boolean).join(' · ')}
+                      </span>
+                    </td>
+                    <td className="num">{signed(a.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
       <div className="row filter-row">
         <Field label="Month" as="select" value={params.get('period') || ''} onChange={(e) => setFilter('period', e.target.value)}>
           <option value="">All months</option>
@@ -45,6 +156,7 @@ export function AdminSettlement() {
           <option value="">Any</option>
           <option value="ready">Awaiting payment</option>
           <option value="paid">Paid</option>
+          <option value="carried">Carried forward</option>
         </Field>
         <Field label="Supplier" as="select" value={params.get('supplierId') || ''} onChange={(e) => setFilter('supplierId', e.target.value)}>
           <option value="">All suppliers</option>
@@ -86,8 +198,8 @@ export function AdminSettlement() {
                     </td>
                     <td>{s.label}</td>
                     <td className="num">{formatPrice(s.totals.commission)}</td>
-                    <td className="num">{formatPrice(s.totals.net)}</td>
-                    <td className="num">{formatPrice(s.totals.atlasTake)}</td>
+                    <td className="num">{signed(s.totals.net)}</td>
+                    <td className="num">{signed(s.totals.atlasTake)}</td>
                     <td>
                       <StatementStatus statement={s} />
                     </td>
@@ -150,6 +262,11 @@ export function AdminStatement() {
           <p>Marked as paid by {statement.paidBy}.</p>
         </Banner>
       )}
+      {statement.status === 'carried' && (
+        <Banner tone="info">
+          <p>Nothing to pay: the net is below zero, so {formatPrice(-statement.totals.net)} is carried to {supplier?.name}’s next statement.</p>
+        </Banner>
+      )}
       {statement.status === 'ready' && (
         <form className="card row filter-row" onSubmit={markPaid} noValidate>
           <Field label="Mock payment reference" placeholder="ATLPAY-2026-0042" value={ref} onChange={(e) => setRef(e.target.value)} error={state.error} />
@@ -165,7 +282,7 @@ export function AdminStatement() {
           <ul className="plain-list">
             {queries.map((q) => (
               <li key={q._id}>
-                <Link to={`/admin/tickets/${q._id}`}>{q.bookingReference}</Link> — {q.status === 'resolved' ? `resolved (${q.resolution?.kind === 'adjustment' ? formatPrice(q.resolution.amount) : 'no change'})` : 'open'}
+                <Link to={`/admin/tickets/${q._id}`}>{q.bookingReference}</Link> — {q.status === 'resolved' ? `resolved (${q.resolution?.kind === 'adjustment' ? signed(q.resolution.amount) : 'no change'})` : 'open'}
               </li>
             ))}
           </ul>

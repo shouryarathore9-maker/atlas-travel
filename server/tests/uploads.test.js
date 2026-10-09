@@ -50,7 +50,7 @@ describe('hotel photo uploads', () => {
         amenities: [],
         photos: [body.photo.url],
         salesStopped: false,
-        roomTypes: hotelB.roomTypes.map((r) => ({ ...r, originalName: r.name, roomsTotal: r.roomsAvailable, baseRate: 6000 })),
+        roomTypes: hotelB.roomTypes.map((r) => ({ ...r, originalName: r.name, baseRate: 6000 })),
       })
       .expect(400);
     expect(put.body.error.message).toMatch(/isn’t one of your uploads/);

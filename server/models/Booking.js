@@ -100,7 +100,6 @@ const bookingSchema = new mongoose.Schema(
       default: null,
     },
     settlement: { type: new mongoose.Schema({ statementId: ObjectId, period: String }, { _id: false }), default: null },
-    roomsReturned: { type: Boolean, default: false }, // hotel: rooms given back after check-out (daily job)
     isSynthetic: { type: Boolean, default: false }, // seeded history (never touches live inventory)
   },
   { timestamps: { createdAt: true, updatedAt: false } },

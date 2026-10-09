@@ -9,6 +9,8 @@ import {
   getOwnHotel,
   getService,
   hotelInputSchema,
+  stopSellDates,
+  stopSellSchema,
   listDepartures,
   listQuerySchema,
   listServices,
@@ -65,6 +67,7 @@ router.post('/departures/:id/reschedule', airlineOnly, validate(rescheduleSchema
 // Hotel: property, rooms, photos and reservations
 router.get('/hotel', hotelOnly, getOwnHotel);
 router.put('/hotel', hotelOnly, validate(hotelInputSchema), once, updateOwnHotel);
+router.post('/hotel/stop-sell', hotelOnly, validate(stopSellSchema), once, stopSellDates);
 router.get('/hotel/photos', hotelOnly, listUploads);
 // Raw image body (no multipart parsing); the size limit is enforced while the body is read.
 router.post('/hotel/photos', hotelOnly, express.raw({ type: PHOTO_TYPES, limit: MAX_PHOTO_BYTES }), uploadPhoto);

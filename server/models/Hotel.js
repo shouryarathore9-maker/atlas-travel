@@ -3,6 +3,7 @@ import { sandboxScope } from './plugins/sandboxScope.js';
 
 // Room prices are NOT stored here: they come from the hotel's rate card (base rate per room type)
 // through the pricing engine, night by night. Cancellation terms come from platform templates.
+// Rooms booked per night live in RoomInventory (one document per room type).
 const roomTypeSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
@@ -11,9 +12,8 @@ const roomTypeSchema = new mongoose.Schema(
     amenities: [String],
     breakfastIncluded: { type: Boolean, default: false },
     taxesAndFees: { type: Number, default: 0 }, // fixed, per room, per night
-    roomsAvailable: { type: Number, required: true, min: 0 }, // counter: −booking, +cancellation, +after check-out
-    roomsTotal: { type: Number, default: null, min: 0 }, // rooms of this type in the hotel (occupancy)
-    salesStopped: { type: Boolean, default: false },
+    roomsTotal: { type: Number, required: true, min: 0 }, // rooms of this type in the hotel, every night
+    salesStopped: { type: Boolean, default: false }, // all dates (date ranges: RoomInventory.stopSell)
   },
   { _id: false },
 );

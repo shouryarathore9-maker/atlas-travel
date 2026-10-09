@@ -7,6 +7,7 @@ import Supplier from '../models/Supplier.js';
 import { istMidnight } from '../utils/dates.js';
 import { HttpError } from '../utils/httpError.js';
 import { finalize, priceFlight, priceHotel } from './bookingService.js';
+import { inventoryFor } from './inventory.js';
 import { chooseOffer } from './offers.js';
 import { getPricingLimits } from './pricingLimits.js';
 import { isSuspended } from './suppliers.js';
@@ -46,7 +47,8 @@ export async function quoteBooking(input, { userId, offerCode, now = Date.now() 
     };
   } else {
     const [hotel, supplier] = await load(Hotel, input.itemId, 'hotel');
-    priced = priceHotel(hotel, supplier, input, { templates, now, limits });
+    const inventory = (await inventoryFor([hotel]))[String(hotel._id)] || {};
+    priced = priceHotel(hotel, supplier, input, { templates, now, limits, inventory });
     draft = {
       type: 'hotel',
       itemId: hotel._id,

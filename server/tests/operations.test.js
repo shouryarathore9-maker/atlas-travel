@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import AuditLog from '../models/AuditLog.js';
 import Booking from '../models/Booking.js';
 import Flight from '../models/Flight.js';
-import Hotel from '../models/Hotel.js';
+import RoomInventory from '../models/RoomInventory.js';
 import Notification from '../models/Notification.js';
 import Offer from '../models/Offer.js';
 import { runDailyJob } from '../services/dailyJob.js';
@@ -103,7 +103,8 @@ describe('hotel cancels a reservation (workflow 8)', () => {
     await manager.post(`/api/supplier/reservations/${booking._id}/cancel`).send({ reason: 'no' }).expect(400); // reason too short
     const res = await manager.post(`/api/supplier/reservations/${booking._id}/cancel`).send({ reason: 'Water leak in the room block' }).expect(200);
     expect(res.body.booking.cancellation).toMatchObject({ by: 'supplier', refundAmount: booking.fareBreakdown.total }); // even non-refundable
-    expect((await Hotel.findById(supplier.hotelId)).roomTypes[0].roomsAvailable).toBe(2);
+    const inv = await RoomInventory.findOne({ hotelId: supplier.hotelId }).lean();
+    expect(Object.values(inv.booked).every((n) => n === 0)).toBe(true); // exactly that stay's nights came back
     const list = await manager.get('/api/supplier/reservations').query({ when: 'all' }).expect(200);
     expect(list.body.items[0].status).toBe('cancelled');
   });

@@ -6,6 +6,7 @@ import AuditLog from '../models/AuditLog.js';
 import Booking from '../models/Booking.js';
 import Flight from '../models/Flight.js';
 import Hotel from '../models/Hotel.js';
+import RoomInventory from '../models/RoomInventory.js';
 import Service from '../models/Service.js';
 import { addDays, todayIstString } from '../utils/dates.js';
 import { app, createFlight, createService, loggedInAgent, serviceInput, supplierWithManager } from './helpers.js';
@@ -142,12 +143,14 @@ describe('hotel manager: property and rooms', () => {
     ...overrides,
   });
 
-  it('updates the hotel, moves the rooms counter with the total, and audit-logs it', async () => {
+  it('updates the hotel, keeps the per-night inventory in step, and audit-logs it', async () => {
     const { supplier, agent } = await supplierWithManager('hotel');
     const res = await agent.put('/api/supplier/hotel').send(update(null, [room({ roomsTotal: 5 }), room({ originalName: null, name: 'Garden Suite' })])).expect(200);
     const hotel = await Hotel.findById(supplier.hotelId).lean();
     expect(hotel.roomTypes.map((r) => r.name)).toEqual(['Deluxe Room', 'Garden Suite']);
-    expect(hotel.roomTypes[0].roomsAvailable).toBe(5); // fixture had 2 available of (implicitly) 2
+    expect(hotel.roomTypes[0].roomsTotal).toBe(5);
+    expect((await RoomInventory.findOne({ hotelId: hotel._id, roomTypeName: 'Deluxe Room' }).lean()).total).toBe(5);
+    expect(res.body.hotel.roomTypes[0].nights).toMatchObject({ bookedTonight: 0, peak: null, stopped: [] });
     expect(res.body.hotel.photos).toEqual(['/images/seed/hotels/hotel-1.jpg']);
     expect(await AuditLog.countDocuments({ action: 'hotel.update', supplierId: supplier._id })).toBe(1);
   });

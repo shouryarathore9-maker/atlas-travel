@@ -16,6 +16,7 @@ import Payment from '../models/Payment.js';
 import Service from '../models/Service.js';
 import Supplier from '../models/Supplier.js';
 import User from '../models/User.js';
+import { inventoryFor, peakBooked, rebuildInventory } from '../services/inventory.js';
 import { DEFAULT_TEMPLATES, loadTemplates } from '../services/templates.js';
 import { addDays, nightsBetween, todayIstString } from '../utils/dates.js';
 import { runWithContext } from '../utils/context.js';
@@ -89,18 +90,15 @@ export async function topUpSuppliers({ now = Date.now(), log = () => {} } = {}) 
         // Upcoming stays only where rooms are really free (never below one room left).
         let { bookings } = result;
         if (hotel) {
-          const free = Object.fromEntries(hotel.roomTypes.map((r) => [r.name, r.roomsAvailable]));
+          const inv = (await inventoryFor([hotel]))[String(hotel._id)] || {};
+          const free = Object.fromEntries(hotel.roomTypes.map((r) => [r.name, r.roomsTotal - (peakBooked(inv[r.name])?.booked || 0)]));
           bookings = bookings.filter((b) => {
-            if (b.status !== 'confirmed' || b.roomsReturned) return true;
+            if (b.status !== 'confirmed' || new Date(b.travelDates.end) <= nowDate) return true;
             const name = b.selection.roomTypeName;
             if (free[name] - b.selection.rooms < 1) return false;
             free[name] -= b.selection.rooms;
             return true;
           });
-          for (const room of hotel.roomTypes) {
-            const taken = room.roomsAvailable - free[room.name];
-            if (taken > 0) await Hotel.updateOne({ _id: hotel._id }, { $inc: { 'roomTypes.$[r].roomsAvailable': -taken } }, { arrayFilters: [{ 'r.name': room.name }] });
-          }
         }
         const kept = new Set(bookings.map((b) => String(b.paymentId)));
         if (bookings.length) {
@@ -108,6 +106,7 @@ export async function topUpSuppliers({ now = Date.now(), log = () => {} } = {}) 
           await Payment.insertMany(result.payments.filter((p) => !p.bookingId || kept.has(String(p._id))), { ordered: false });
           for (const [offerId, used] of Object.entries(result.offerUse)) await Offer.updateOne({ _id: offerId, status: 'active' }, { $inc: { redemptions: used } });
         }
+        if (hotel) await rebuildInventory({ Booking, hotels: [hotel] });
         added = bookings.length;
         summary.bookings += added;
       }

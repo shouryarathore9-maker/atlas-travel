@@ -40,7 +40,7 @@ export function flatAirlineCard(price = 5000, route = ['DEL', 'BOM']) {
 }
 export function flatHotelCard(baseRates = { 'Deluxe Room': 6000 }) {
   const card = defaultHotelRateCard({ baseRates, flexibleTemplate: 'H-FREE2' });
-  return { ...card, dayOfWeek: off(card.dayOfWeek), seasons: off(card.seasons), leadTime: off(card.leadTime) };
+  return { ...card, dayOfWeek: off(card.dayOfWeek), seasons: off(card.seasons), leadTime: off(card.leadTime), occupancy: off(card.occupancy) };
 }
 
 export async function testAirline(overrides = {}) {
@@ -82,7 +82,7 @@ export function hotelFixture(overrides = {}) {
     starRating: 4,
     amenities: ['Free Wi-Fi', 'Spa'],
     photos: [],
-    roomTypes: [{ name: 'Deluxe Room', occupancy: { adults: 2, children: 1 }, taxesAndFees: 720, roomsAvailable: 2, roomsTotal: 2 }],
+    roomTypes: [{ name: 'Deluxe Room', occupancy: { adults: 2, children: 1 }, taxesAndFees: 720, roomsTotal: 2 }],
     ...overrides,
   };
 }

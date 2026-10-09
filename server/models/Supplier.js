@@ -18,6 +18,12 @@ const supplierSchema = new mongoose.Schema({
     at: { type: Date, default: null },
     by: { type: String, default: '' },
   },
+  // Admin's per-supplier commission, scheduled by month (services/commission.js). Empty = product default;
+  // an entry with rate null switches back to the default from its month.
+  commissionOverrides: {
+    type: [{ _id: false, from: { type: String, required: true }, rate: { type: Number, default: null } }],
+    default: [],
+  },
 });
 
 supplierSchema.plugin(sandboxScope);

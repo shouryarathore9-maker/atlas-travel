@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import CountUp from '../components/CountUp.jsx';
 import Icon from '../components/Icon.jsx';
 import Lightbox from '../components/Lightbox.jsx';
 import PriceSummary from '../components/PriceSummary.jsx';
@@ -69,8 +70,8 @@ function HotelBooking({ data, stay }) {
 
   const problemFor = (room) => {
     const rooms = roomCounts[room.name];
-    if (room.salesStopped) return 'Not available to book right now.';
-    if (room.roomsAvailable === 0) return 'Fully booked for now.';
+    if (room.salesStopped) return 'Not available on these dates.';
+    if (room.roomsAvailable === 0) return 'Fully booked on these dates.';
     if (rooms > room.roomsAvailable) return `Only ${pluralize(room.roomsAvailable, 'room')} of this type left.`;
     if (!roomFits(room, { adults: stay.adults, children: stay.children, rooms })) {
       return `${pluralize(rooms, 'room')} can’t fit ${pluralize(stay.adults, 'adult')}${stay.children ? ` and ${pluralize(stay.children, 'child', 'children')}` : ''}. Add rooms.`;
@@ -247,7 +248,9 @@ function HotelBooking({ data, stay }) {
                               <p className="small muted">{p.terms}</p>
                             </div>
                             <div className="rate-plan-price">
-                              <p className="price">{formatPrice(p.avgNightly)}</p>
+                              <p className="price">
+                                <CountUp value={p.avgNightly} format={formatPrice} />
+                              </p>
                               <p className="small muted">
                                 avg per night + {formatPrice(r.taxesAndFees)} taxes · {formatPrice(p.perRoom)} per room for the stay
                               </p>
