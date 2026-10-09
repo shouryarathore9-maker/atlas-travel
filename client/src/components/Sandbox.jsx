@@ -45,7 +45,7 @@ export function SandboxDialog({ kind, onClose }) {
       onClose={onClose}
       footer={
         <div className="row">
-          <button type="button" className="btn btn-primary" onClick={start} disabled={state.busy || (kind !== 'admin' && !choice)}>
+          <button type="button" className="btn btn-primary" onClick={start} disabled={state.busy || (kind !== 'admin' && !choice)} aria-busy={state.busy || undefined}>
             {state.busy ? 'Setting up your demo…' : 'Start demo'}
           </button>
           <button type="button" className="btn btn-secondary" onClick={onClose} disabled={state.busy}>

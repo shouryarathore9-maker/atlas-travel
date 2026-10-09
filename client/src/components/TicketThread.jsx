@@ -58,7 +58,7 @@ export default function TicketThread({ ticket, me, onReply, replyLabel = 'Send r
         <form onSubmit={submit} noValidate className="stack ticket-reply">
           <Field as="textarea" label="Reply" rows={3} maxLength={1000} value={message} onChange={(e) => setMessage(e.target.value)} error={state.error} />
           <div>
-            <button type="submit" className="btn btn-primary btn-sm" disabled={state.busy}>
+            <button type="submit" className="btn btn-primary btn-sm" disabled={state.busy} aria-busy={state.busy || undefined}>
               {state.busy ? 'Sending…' : replyLabel}
             </button>
           </div>

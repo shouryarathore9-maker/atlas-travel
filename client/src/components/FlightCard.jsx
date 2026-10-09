@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
+import CountUp from './CountUp.jsx';
 import { RatingBadge } from './Rating.jsx';
+import { useReveal } from '../hooks/useReveal.js';
 import { formatDuration, formatPrice, formatTime, stopsLabel } from '../lib/format.js';
 
 // Calendar day in IST, so "+1" is correct regardless of the viewer's timezone.
@@ -8,9 +10,10 @@ const istDay = (date) => Math.floor((new Date(date).getTime() + 5.5 * 3600 * 100
 export default function FlightCard({ flight, party, cabin }) {
   const plusDays = istDay(flight.arrivalTime) - istDay(flight.departureTime);
   const href = `/flights/${flight._id}?${new URLSearchParams({ ...party, cabin })}`;
+  const revealRef = useReveal();
   return (
     // Whole card is clickable, same pattern as HotelCard: overlay link under the real button.
-    <article className="result-card flight-card clickable-card fade-in">
+    <article ref={revealRef} className="result-card flight-card clickable-card fade-in">
       <Link to={href} className="card-overlay-link" tabIndex={-1} aria-hidden="true" />
       <div className="flight-card-airline">
         <h2 className="result-title">{flight.airline}</h2>
@@ -40,7 +43,9 @@ export default function FlightCard({ flight, party, cabin }) {
       </div>
 
       <div className="result-price">
-        <p className="price">{formatPrice(flight.price)}</p>
+        <p className="price">
+          <CountUp value={flight.price} format={formatPrice} />
+        </p>
         <p className="small muted">per traveller</p>
         <Link
           to={href}

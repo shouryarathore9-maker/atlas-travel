@@ -48,7 +48,7 @@
 - **Notification bell and panel (Phase 2):** a line bell icon in the header with a small terracotta count badge (hidden at 0, "9+" above 9). When a new notification arrives the bell swings from its top for about a second (damped ±16° → 0) with a soft E6–G6 chime; reduced motion gets a brief fade instead. "Sound on/off" sits beside "Mark all as read".
 - **Photo picker (hotel console):** "Your uploads" (up to 4 tiles, each with Delete while unused, and an "Upload a photo" secondary button) above the "Atlas gallery" grid; picked photos show their order number in a terracotta circle. The panel is a 360px dropdown on laptop and a full-height sheet on phones: each row has a small type icon, title, one line of body, relative time; unread rows have a terracotta dot and a faint sand background. "Mark all as read" is a text button at the top right of the panel.
 - **Status badges (Phase 2):** small pills — Confirmed (success), Cancelled (muted ink), Cancelled by airline/hotel (error tone), Schedule changed (olive), Paid / Ready (statements), Active / Paused / Expired / Exhausted (offers), Open / Waiting / Answered / Closed (tickets).
-- **Charts (Phase 2):** hand-drawn SVG, thin lines, no 3D or gradients; series colours in this order: `--color-primary-strong` (flights / current period), `--color-secondary` (hotels), `--color-sand` dashed (previous period); gridlines in sand at 50% opacity; values labelled directly where possible; every chart has a "View as table" toggle (accessible equivalent).
+- **Charts (Phase 2):** hand-drawn SVG, thin lines, no 3D or gradients; series colours in this order: `--color-primary-strong` (flights / current period), `--color-secondary` (hotels), `--color-sand` dashed (previous period); gridlines in sand at 50% opacity; values labelled directly where possible; every chart has a "View as table" toggle (accessible equivalent). Horizontal bar charts (bar lists) always span the full row of the analytics grid, stacked one below the other, so the bars have room; their label column is capped (~220px) so the extra width goes to the bars.
 - **Photo viewer (lightbox):** full-screen dark overlay for hotel photos; translucent ivory round buttons for close and previous/next, and a pill counter.
 
 ## States
@@ -110,9 +110,17 @@ Kept minimal and functional, not decorative:
 - Skeleton-to-content fade (200ms) when results load.
 - No parallax, no auto-playing carousels — consistent with the "calm, editorial" positioning.
 
+**Motion and feedback** (all of it off under `prefers-reduced-motion: reduce` — content then shows final and static)
+- **Focus:** inputs, selects and textareas ease their border to terracotta with a faint terracotta halo; pill fields ease their 2px focus ring in. The focus ring itself is never removed.
+- **Validation:** errors show a red border and the red message with a small alert icon under the field. A quiet green border and check appear only after a field has been touched and passes (Field's `valid` prop) — never on load, and never on a sign-in password.
+- **Press:** buttons push down slightly on press (`translateY(1px) scale(0.98)`); icon and text buttons have their own small press; hover colour changes ease in.
+- **Scroll reveals:** sections and cards below the fold fade in with a short slide up (~450ms) once, the first time they scroll into view (`Reveal` / `useReveal`). Content already on screen is never hidden, and nothing is hidden without IntersectionObserver. Opacity and transform only, so no layout shift.
+- **Loading:** a 3px terracotta bar across the top of the window while any API request runs (shown after ~150ms so fast calls don't flash; at once when a search is submitted or a page's code loads). Buttons whose action is running get `aria-busy="true"`, which shows a small spinner before their "Saving…" text. The page-level loader is a flight path drawing itself between two airports, with status text under it.
+- **Count-up numbers:** prices on result and stay cards, fare prices, price-summary and booking totals, and review scores count up (~700ms, ease-out) the first time they come into view, and glide from old to new when the value changes. They use the same formatter as before (₹ with Indian grouping), tabular figures and a reserved width, so nothing jumps; screen readers get the final value only.
+
 ## Loading States
 - Skeleton cards for result lists and detail pages (sand blocks in the shape of the final content).
-- Spinner + short status text ("Waiting for payment…", "Processing payment…", "Fetching your booking…") for actions with backend round-trips.
+- Spinner + short status text ("Waiting for payment…", "Processing payment…", "Fetching your booking…") for actions with backend round-trips — the branded route loader, plus the top progress bar and busy buttons (see **Motion and feedback**).
 
 ## Form Patterns & Validation
 - Inline validation on blur, not on every keystroke.

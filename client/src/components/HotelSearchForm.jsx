@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from './Icon.jsx';
+import { startProgressNow } from '../lib/progress.js';
 import { CITIES } from '../lib/cities.js';
 import { addDays, isDateString, lastBookableDate, todayIst } from '../lib/dates.js';
 
@@ -32,6 +33,7 @@ export default function HotelSearchForm({ initial = {}, compact = false }) {
   function submit(e) {
     e.preventDefault();
     if (invalid) return;
+    startProgressNow(); // the results page shows skeletons; the top bar starts at once
     navigate(`/hotels?${new URLSearchParams(values)}`);
   }
 

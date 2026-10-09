@@ -2,8 +2,10 @@ import { lazy, Suspense, useEffect } from 'react';
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import Footer from './components/Footer.jsx';
 import Nav from './components/Nav.jsx';
+import ProgressBar from './components/ProgressBar.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import { Spinner } from './components/States.jsx';
+import { startProgressNow } from './lib/progress.js';
 import FlightDetail from './pages/FlightDetail.jsx';
 import FlightResults from './pages/FlightResults.jsx';
 import Home from './pages/Home.jsx';
@@ -64,13 +66,19 @@ function ScrollToTop() {
   return null;
 }
 
+// Shown while a page's code downloads: the branded loader plus the top progress bar at once.
+function RouteFallback() {
+  useEffect(() => startProgressNow(), []);
+  return <Spinner />;
+}
+
 function Shell() {
   return (
     <>
       <Nav />
       {/* Full-height wrapper keeps the footer below the fold while pages load (prevents layout shift). */}
       <div className="shell-main">
-        <Suspense fallback={<Spinner />}>
+        <Suspense fallback={<RouteFallback />}>
           <Outlet />
         </Suspense>
       </div>
@@ -88,6 +96,7 @@ export default function App() {
         Skip to content
       </a>
       <ScrollToTop />
+      <ProgressBar />
       <Routes>
         <Route
           path="/"

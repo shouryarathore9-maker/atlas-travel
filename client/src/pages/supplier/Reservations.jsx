@@ -142,7 +142,7 @@ export default function Reservations() {
           onClose={() => setCancelling(null)}
           footer={
             <div className="row">
-              <button type="button" className="btn btn-danger" onClick={confirmCancel} disabled={state.busy}>
+              <button type="button" className="btn btn-danger" onClick={confirmCancel} disabled={state.busy} aria-busy={state.busy || undefined}>
                 {state.busy ? 'Cancelling…' : 'Cancel and refund in full'}
               </button>
               <button type="button" className="btn btn-secondary" onClick={() => setCancelling(null)}>

@@ -270,7 +270,8 @@ export default function AdminAnalytics() {
                       Searches with no results: {data.funnel.zeroResults.toLocaleString('en-IN')} ({pct(data.funnel.searches ? data.funnel.zeroResults / data.funnel.searches : 0)}). {data.notes.payments}
                     </p>
                   </section>
-                  <section className="card chart-card">
+                  {/* Full row: the bar chart below it is full width, so this card would otherwise sit alone. */}
+                  <section className="card chart-card chart-wide">
                     <h2 className="chart-title">Offers</h2>
                     <div className="stat-grid">
                       <Stat label="Redemptions" value={data.offers.redemptions.toLocaleString('en-IN')} />

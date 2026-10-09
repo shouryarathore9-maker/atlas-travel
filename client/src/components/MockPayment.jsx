@@ -62,6 +62,7 @@ export default function MockPayment({ amount, busy, onPay }) {
   const [touched, setTouched] = useState({});
   const errors = validateCard(card);
   const shown = (key) => (touched[key] ? errors[key] : undefined);
+  const valid = (key) => Boolean(touched[key] && !errors[key]);
   const set = (key, fmt = (v) => v) => (e) => setCard((c) => ({ ...c, [key]: fmt(e.target.value) }));
   const blur = (key) => () => setTouched((t) => ({ ...t, [key]: true }));
 
@@ -104,7 +105,7 @@ export default function MockPayment({ amount, busy, onPay }) {
               Scan with any UPI app to pay <strong>{formatPrice(amount)}</strong>.
             </p>
             <p className="small muted">This is a simulation — no UPI request is sent and no money moves.</p>
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => onPay({ method: 'upi', simulateFailure: false })}>
+            <button type="button" className="btn btn-primary" disabled={busy} aria-busy={busy || undefined} onClick={() => onPay({ method: 'upi', simulateFailure: false })}>
               Simulate payment
             </button>
             <button type="button" className="btn-text small" disabled={busy} onClick={() => onPay({ method: 'upi', simulateFailure: true })}>
@@ -124,10 +125,11 @@ export default function MockPayment({ amount, busy, onPay }) {
               onChange={set('number', formatCardNumber)}
               onBlur={blur('number')}
               error={shown('number')}
+              valid={valid('number')}
               hint={`Any 16 digits work. A number ending in ${FAIL_SUFFIX} simulates a decline.`}
               className="span-2"
             />
-            <Field label="Expiry" inputMode="numeric" autoComplete="off" placeholder="MM/YY" value={card.expiry} onChange={set('expiry', formatExpiry)} onBlur={blur('expiry')} error={shown('expiry')} />
+            <Field label="Expiry" inputMode="numeric" autoComplete="off" placeholder="MM/YY" value={card.expiry} onChange={set('expiry', formatExpiry)} onBlur={blur('expiry')} error={shown('expiry')} valid={valid('expiry')} />
             <Field
               label="CVV"
               inputMode="numeric"
@@ -138,11 +140,12 @@ export default function MockPayment({ amount, busy, onPay }) {
               onChange={set('cvv', (v) => v.replace(/\D/g, '').slice(0, 3))}
               onBlur={blur('cvv')}
               error={shown('cvv')}
+              valid={valid('cvv')}
             />
-            <Field label="Name on card" autoComplete="off" value={card.name} onChange={set('name')} onBlur={blur('name')} error={shown('name')} className="span-2" />
+            <Field label="Name on card" autoComplete="off" value={card.name} onChange={set('name')} onBlur={blur('name')} error={shown('name')} valid={valid('name')} className="span-2" />
           </div>
           <p className="small muted">Card details stay in this browser tab — they are never sent to a server.</p>
-          <button type="submit" className="btn btn-primary" disabled={busy}>
+          <button type="submit" className="btn btn-primary" disabled={busy} aria-busy={busy || undefined}>
             Pay {formatPrice(amount)}
           </button>
         </form>

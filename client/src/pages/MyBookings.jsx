@@ -7,6 +7,7 @@ import { Banner, EmptyState, ErrorState, SkeletonList } from '../components/Stat
 import { bookingsApi, meApi } from '../api/resources.js';
 import { useAsync } from '../hooks/useAsync.js';
 import { useDocumentTitle } from '../hooks/useDocumentTitle.js';
+import { useReveal } from '../hooks/useReveal.js';
 import { formatDate, formatDateTime, formatPrice } from '../lib/format.js';
 import { checkInOpensAt, checkInState } from '../lib/trips.js';
 import { estimateRefund, isCancellable } from '../lib/validation.js';
@@ -130,7 +131,7 @@ export default function MyBookings() {
           onClose={() => setConfirming(null)}
           footer={
             <div className="row">
-              <button type="button" className="btn btn-danger" onClick={cancel} disabled={cancelState.busy}>
+              <button type="button" className="btn btn-danger" onClick={cancel} disabled={cancelState.busy} aria-busy={cancelState.busy || undefined}>
                 {cancelState.busy ? 'Cancelling…' : 'Yes, cancel booking'}
               </button>
               <button type="button" className="btn btn-secondary" onClick={() => setConfirming(null)} disabled={cancelState.busy}>
@@ -157,7 +158,7 @@ export default function MyBookings() {
           onClose={() => setHelpFor(null)}
           footer={
             <div className="row">
-              <button type="submit" form="help-form" className="btn btn-primary" disabled={help.busy}>
+              <button type="submit" form="help-form" className="btn btn-primary" disabled={help.busy} aria-busy={help.busy || undefined}>
                 {help.busy ? 'Sending…' : 'Send to Atlas support'}
               </button>
               <button type="button" className="btn btn-secondary" onClick={() => setHelpFor(null)}>
@@ -183,8 +184,9 @@ function BookingRow({ booking, onCancel, onHelp, onRespond }) {
   const checkIn = checkInState(booking);
   const reschedule = booking.reschedule?.decision === 'pending' && new Date(booking.reschedule.respondBy) > new Date() ? booking.reschedule : null;
   const reply = booking.specialRequest?.reply;
+  const revealRef = useReveal();
   return (
-    <article className="card booking-row">
+    <article ref={revealRef} className="card booking-row">
       <div className="spread">
         <div>
           <p className="eyebrow">

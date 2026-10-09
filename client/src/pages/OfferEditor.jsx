@@ -164,7 +164,7 @@ export default function OfferEditor({ scope }) {
         </section>
 
         <div className="row">
-          <button type="submit" className="btn btn-primary" disabled={save.busy}>
+          <button type="submit" className="btn btn-primary" disabled={save.busy} aria-busy={save.busy || undefined}>
             {save.busy ? 'Saving…' : isNew ? 'Create offer' : 'Save changes'}
           </button>
           <Link to={base} className="btn btn-secondary">

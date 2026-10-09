@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Icon from './Icon.jsx';
+import Reveal from './Reveal.jsx';
 import StayCard from './StayCard.jsx';
 import { hotelsApi } from '../api/resources.js';
 import { useAsync } from '../hooks/useAsync.js';
@@ -30,7 +31,7 @@ export default function BestHotels({ stayQuery }) {
   const visible = showAll ? hotels : hotels.slice(0, SHOWN);
 
   return (
-    <section className="section best-hotels" id="best-hotels" aria-labelledby="best-heading">
+    <Reveal as="section" className="section best-hotels" id="best-hotels" aria-labelledby="best-heading">
       <div className="spread section-head">
         <div>
           <h2 id="best-heading">Best hotels</h2>
@@ -57,6 +58,6 @@ export default function BestHotels({ stayQuery }) {
           ))}
         </ul>
       )}
-    </section>
+    </Reveal>
   );
 }

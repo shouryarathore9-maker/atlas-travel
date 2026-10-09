@@ -12,14 +12,32 @@
   font-size: 0.95rem;
   text-decoration: none;
   cursor: pointer;
-  transition: background var(--ease), border-color var(--ease), color var(--ease), transform 120ms ease;
+  transition: background var(--ease), border-color var(--ease), color var(--ease), box-shadow var(--ease), opacity var(--ease), transform 120ms ease;
 }
+/* Tactile press: a slight push down and in (design.md → Motion and feedback). */
 .btn:active:not(:disabled) {
-  transform: scale(0.98);
+  transform: translateY(1px) scale(0.98);
 }
 .btn:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+/* Busy: the button keeps its place and shows a small spinner before its "Saving…" text. */
+.btn[aria-busy='true'] {
+  cursor: progress;
+}
+.btn[aria-busy='true']:disabled {
+  opacity: 0.85;
+}
+.btn[aria-busy='true']::before {
+  content: '';
+  flex-shrink: 0;
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
 }
 .btn-primary {
   background: var(--color-primary-strong);
@@ -27,6 +45,7 @@
 }
 .btn-primary:hover:not(:disabled) {
   background: var(--color-primary-hover);
+  box-shadow: 0 2px 8px rgba(156, 84, 54, 0.22);
 }
 .btn-secondary {
   background: transparent;
@@ -51,6 +70,12 @@
 }
 .btn-text:hover:not(:disabled) {
   color: var(--color-primary-ink);
+}
+.btn-text {
+  transition: color var(--ease), transform 120ms ease;
+}
+.btn-text:active:not(:disabled) {
+  transform: translateY(1px);
 }
 .btn-danger {
   background: transparent;
@@ -93,7 +118,7 @@
   border: 1px solid #b9ab94;
   border-radius: var(--radius-sm);
   background: var(--color-surface);
-  transition: border-color var(--ease);
+  transition: border-color var(--ease), box-shadow var(--ease), background-color var(--ease);
 }
 .textarea {
   min-height: 96px;
@@ -104,14 +129,62 @@
 .textarea:hover {
   border-color: var(--color-text);
 }
+.input:focus,
+.select:focus,
+.textarea:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(184, 107, 75, 0.14);
+}
 .input[aria-invalid='true'],
-.select[aria-invalid='true'] {
+.select[aria-invalid='true'],
+.textarea[aria-invalid='true'] {
   border-color: var(--color-error);
 }
+.input[aria-invalid='true']:focus,
+.select[aria-invalid='true']:focus,
+.textarea[aria-invalid='true']:focus {
+  box-shadow: 0 0 0 3px rgba(184, 75, 75, 0.14);
+}
+/* Valid: only after the field was touched and passed (Field's `valid` prop) — never on load. */
+.field.is-valid .input,
+.field.is-valid .select,
+.field.is-valid .textarea {
+  border-color: var(--color-success);
+}
+.field.is-valid .input {
+  padding-right: 36px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234b7a5a' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+}
+/* Error text: red, with a small alert icon, easing in under the field. */
 .field-error {
   color: var(--color-error-ink);
   font-size: 0.85rem;
   margin: 0;
+  animation: fieldMessageIn 180ms ease;
+}
+.field-error::before {
+  content: '';
+  display: inline-block;
+  width: 1.05em;
+  height: 1.05em;
+  margin-right: 6px;
+  vertical-align: -0.2em;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7.5v5.5M12 16.5v.01'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7.5v5.5M12 16.5v.01'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+@keyframes fieldMessageIn {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 .field-hint {
   color: var(--color-muted);
@@ -167,9 +240,12 @@ legend {
   border: 1px solid var(--color-sand);
   border-radius: var(--radius-md);
   min-height: 60px;
-  transition: border-color var(--ease);
+  outline: 2px solid transparent;
+  outline-offset: 6px;
+  transition: border-color var(--ease), background-color var(--ease), outline-color var(--ease), outline-offset var(--ease);
 }
-/* The ring moves to the whole pill (design.md: visible 2px terracotta focus ring, never removed) */
+/* The ring moves to the whole pill (design.md: visible 2px terracotta focus ring, never removed);
+   it eases in from slightly further out. */
 .pill-field:focus-within {
   border-color: var(--color-primary);
   outline: 2px solid var(--color-primary);
@@ -337,13 +413,136 @@ legend {
   }
 }
 
-.spinner {
-  width: 36px;
-  height: 36px;
-  border: 3px solid var(--color-sand);
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: spin 800ms linear infinite;
+/* ---------- Motion and feedback (design.md) ---------- */
+/* Scroll reveal (useReveal): JS adds .reveal only to elements below the fold when
+   IntersectionObserver exists, so content is never hidden without it. Opacity/transform only. */
+.reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 450ms ease, transform 450ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.reveal.is-revealed {
+  opacity: 1;
+  transform: none;
+}
+
+/* Count-up numbers: the final value stays in the DOM (invisible while counting) and reserves the
+   width; the moving number is drawn over it. */
+.count-up {
+  font-variant-numeric: tabular-nums;
+}
+.count-up.is-counting {
+  display: inline-grid;
+  justify-items: end;
+}
+.count-up.is-counting > span {
+  grid-area: 1 / 1;
+}
+.count-up-final {
+  opacity: 0;
+}
+
+/* Top progress bar (ProgressBar.jsx) while API requests are in flight. */
+.top-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 200;
+  pointer-events: none;
+  transition: opacity 300ms ease 100ms;
+}
+.top-progress-bar {
+  display: block;
+  height: 100%;
+  background: var(--color-primary);
+  box-shadow: 0 0 8px rgba(184, 107, 75, 0.45);
+  transform-origin: left center;
+  transform: scaleX(0.7);
+  animation: progressTrickle 8s cubic-bezier(0.1, 0.6, 0.2, 1) forwards;
+}
+.top-progress.is-done {
+  opacity: 0;
+}
+.top-progress.is-done .top-progress-bar {
+  animation: none;
+  transform: scaleX(1);
+  transition: transform 200ms ease;
+}
+@keyframes progressTrickle {
+  from {
+    transform: scaleX(0.04);
+  }
+  25% {
+    transform: scaleX(0.4);
+  }
+  to {
+    transform: scaleX(0.9);
+  }
+}
+/* Reduced motion: base.css already stops every transition and animation; nothing stays hidden either
+   (JS skips reveals and count-ups, this is a safety net). The progress bar and loaders show static. */
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Branded loader (States.jsx Spinner): a flight path drawn between two airports, over and over. */
+.route-loader {
+  overflow: visible;
+}
+.route-loader-track {
+  fill: none;
+  stroke: var(--color-sand);
+  stroke-width: 2;
+  stroke-dasharray: 2 5;
+  stroke-linecap: round;
+}
+.route-loader-line {
+  fill: none;
+  stroke: var(--color-primary);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 0;
+  animation: routeDraw 1.6s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
+.route-loader-stop {
+  fill: var(--color-surface);
+  stroke: var(--color-primary);
+  stroke-width: 2;
+}
+.route-loader-stop--end {
+  animation: routeArrive 1.6s ease infinite;
+  transform-origin: 88px 32px;
+}
+@keyframes routeDraw {
+  0% {
+    stroke-dashoffset: 100;
+  }
+  60%,
+  80% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: -100;
+  }
+}
+@keyframes routeArrive {
+  0%,
+  50% {
+    transform: scale(1);
+  }
+  62% {
+    transform: scale(1.45);
+  }
+  80%,
+  100% {
+    transform: scale(1);
+  }
 }
 @keyframes spin {
   to {
@@ -473,6 +672,12 @@ legend {
 }
 .icon-btn:hover {
   background: var(--color-sand-soft);
+}
+.icon-btn {
+  transition: background-color var(--ease), transform 120ms ease;
+}
+.icon-btn:active:not(:disabled) {
+  transform: scale(0.94);
 }
 
 /* ---------- Navigation ---------- */

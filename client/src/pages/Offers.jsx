@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import OfferCard, { SCOPE_LABEL } from '../components/OfferCard.jsx';
+import Reveal from '../components/Reveal.jsx';
 import SmartImage from '../components/SmartImage.jsx';
 import { EmptyState, ErrorState, SkeletonList } from '../components/States.jsx';
 import { offersApi } from '../api/resources.js';
@@ -36,9 +37,9 @@ export function OffersPage() {
       {data && data.offers.length > 0 && (
         <ul className="offer-grid offer-grid--page">
           {data.offers.map((o) => (
-            <li key={o._id}>
+            <Reveal as="li" key={o._id}>
               <OfferCard offer={o} />
-            </li>
+            </Reveal>
           ))}
         </ul>
       )}

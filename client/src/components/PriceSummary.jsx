@@ -1,3 +1,4 @@
+import CountUp from './CountUp.jsx';
 import { formatPrice } from '../lib/format.js';
 
 // Sticky side panel on desktop; on phones it sticks to the bottom showing only total + CTA.
@@ -16,7 +17,7 @@ export default function PriceSummary({ title = 'Price summary', lines, total, no
           <div className="price-line price-total">
             <dt>Total</dt>
             {/* Nothing chosen yet (e.g. no room selected) → a dash, not a misleading ₹0 */}
-            <dd>{lines.some(Boolean) ? formatPrice(total) : <span aria-label="Not yet calculated">—</span>}</dd>
+            <dd>{lines.some(Boolean) ? <CountUp value={total} format={formatPrice} /> : <span aria-label="Not yet calculated">—</span>}</dd>
           </div>
         </dl>
         {note && <div className="small muted price-note">{note}</div>}

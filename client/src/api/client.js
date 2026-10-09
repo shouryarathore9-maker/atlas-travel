@@ -1,3 +1,5 @@
+import { requestStarted } from '../lib/progress.js';
+
 // The API is always same-origin: Vite proxies /api in development; on Vercel the same
 // project serves /api. Relative URLs keep the httpOnly auth cookie first-party.
 const BASE_URL = '';
@@ -51,16 +53,25 @@ function toQuery(params = {}) {
   return s ? `?${s}` : '';
 }
 
+// Background polling never drives the top progress bar; callers can also pass { quiet: true }.
+const QUIET_PATHS = [/^\/notifications\/unread-count/];
+const noop = () => {};
+const trackProgress = (path, quiet) => (quiet || QUIET_PATHS.some((re) => re.test(path)) ? noop : requestStarted());
+
 // Uploads raw bytes (an image) with their content type; same error handling as api().
 export async function uploadBlob(path, blob) {
   let res;
+  let done = noop;
   try {
     await modeKnown;
+    done = trackProgress(path);
     res = await fetch(`${apiRoot(false)}${path}`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': blob.type }, body: blob });
   } catch {
+    done();
     throw new ApiError(0, { message: 'We could not reach Atlas. Check your connection and try again.', code: 'NETWORK' });
   }
   const data = await res.json().catch(() => ({}));
+  done();
   if (!res.ok) {
     noticeSandboxEnd(data);
     throw new ApiError(res.status, data.error, data);
@@ -73,10 +84,12 @@ export async function uploadBlob(path, blob) {
 // duplicate just never settles — no error message for something that worked.
 const never = () => new Promise(() => {});
 
-export async function api(path, { method = 'GET', body, query, signal, raw = false } = {}) {
+export async function api(path, { method = 'GET', body, query, signal, raw = false, quiet = false } = {}) {
   let res;
+  let done = noop;
   try {
     if (!raw) await modeKnown;
+    done = trackProgress(path, quiet);
     res = await fetch(`${apiRoot(raw)}${path}${toQuery(query)}`, {
       method,
       signal,
@@ -85,11 +98,13 @@ export async function api(path, { method = 'GET', body, query, signal, raw = fal
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch (err) {
+    done();
     if (err.name === 'AbortError') throw err;
     throw new ApiError(0, { message: 'We could not reach Atlas. Check your connection and try again.', code: 'NETWORK' });
   }
 
   const data = await res.json().catch(() => ({}));
+  done(); // before a DUPLICATE_SUBMIT's never-settling promise, so the bar still finishes
   if (!res.ok) {
     noticeSandboxEnd(data);
     if (data.error?.code === 'DUPLICATE_SUBMIT') return never();

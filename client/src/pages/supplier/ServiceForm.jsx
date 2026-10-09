@@ -211,7 +211,7 @@ export default function ServiceForm() {
           bookings keep their times.
         </p>
         <div className="row">
-          <button type="submit" className="btn btn-primary" disabled={busy}>
+          <button type="submit" className="btn btn-primary" disabled={busy} aria-busy={busy || undefined}>
             {busy ? 'Saving…' : isNew ? 'Add service' : 'Save changes'}
           </button>
           <Link to="/supplier/services" className="btn btn-secondary">

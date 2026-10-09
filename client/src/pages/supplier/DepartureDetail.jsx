@@ -191,6 +191,7 @@ export default function DepartureDetail() {
                 type="button"
                 className="btn btn-danger"
                 disabled={action.busy}
+                aria-busy={action.busy || undefined}
                 onClick={() => run(() => supplierApi.departures.cancel(id, form.reason.trim()), (r) => `Departure cancelled. ${r.bookingsRefunded} booking${r.bookingsRefunded === 1 ? '' : 's'} refunded in full.`)}
               >
                 {action.busy ? 'Cancelling…' : 'Cancel departure and refund'}
@@ -216,7 +217,7 @@ export default function DepartureDetail() {
           onClose={() => setDialog(null)}
           footer={
             <div className="row">
-              <button type="button" className="btn btn-primary" disabled={action.busy} onClick={() => run(() => supplierApi.departures.reschedule(id, form.time), (r) => `Rescheduled. ${r.affected} booking${r.affected === 1 ? '' : 's'} told about the change.`)}>
+              <button type="button" className="btn btn-primary" disabled={action.busy} aria-busy={action.busy || undefined} onClick={() => run(() => supplierApi.departures.reschedule(id, form.time), (r) => `Rescheduled. ${r.affected} booking${r.affected === 1 ? '' : 's'} told about the change.`)}>
                 {action.busy ? 'Saving…' : 'Reschedule'}
               </button>
               <button type="button" className="btn btn-secondary" onClick={() => setDialog(null)}>

@@ -146,7 +146,7 @@ export default function Services() {
           onClose={() => setDeleting(null)}
           footer={
             <div className="row">
-              <button type="button" className="btn btn-danger" onClick={confirmDelete} disabled={deleteState.busy}>
+              <button type="button" className="btn btn-danger" onClick={confirmDelete} disabled={deleteState.busy} aria-busy={deleteState.busy || undefined}>
                 {deleteState.busy ? 'Deleting…' : 'Delete service'}
               </button>
               <button type="button" className="btn btn-secondary" onClick={() => setDeleting(null)}>

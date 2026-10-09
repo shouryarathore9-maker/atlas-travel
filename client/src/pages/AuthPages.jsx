@@ -31,6 +31,7 @@ function useAuthForm(initial, validate) {
       onChange: (e) => setValues((v) => ({ ...v, [key]: e.target.value })),
       onBlur: () => setTouched((t) => ({ ...t, [key]: true })),
       error: touched[key] ? errors[key] : undefined,
+      valid: Boolean(touched[key] && !errors[key] && values[key].trim()),
     }),
     touchAll: () => setTouched(Object.fromEntries(Object.keys(initial).map((k) => [k, true]))),
   };
@@ -78,8 +79,9 @@ export function Login() {
         )}
         <form onSubmit={submit} noValidate className="stack">
           <Field label="Email" type="email" autoComplete="email" {...form.field('email')} />
-          <Field label="Password" type="password" autoComplete="current-password" {...form.field('password')} />
-          <button type="submit" className="btn btn-primary btn-block" disabled={form.busy}>
+          {/* No green state on the sign-in password: "valid" would wrongly suggest it is correct. */}
+          <Field label="Password" type="password" autoComplete="current-password" {...form.field('password')} valid={false} />
+          <button type="submit" className="btn btn-primary btn-block" disabled={form.busy} aria-busy={form.busy || undefined}>
             {form.busy ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
@@ -138,7 +140,7 @@ export function Signup() {
             {...form.field('password')}
           />
           <Field label="Mobile number" optional type="tel" inputMode="numeric" autoComplete="tel-national" {...form.field('phone')} />
-          <button type="submit" className="btn btn-primary btn-block" disabled={form.busy}>
+          <button type="submit" className="btn btn-primary btn-block" disabled={form.busy} aria-busy={form.busy || undefined}>
             {form.busy ? 'Creating account…' : 'Create account'}
           </button>
         </form>

@@ -33,10 +33,16 @@ export default function PartyPicker({ value, onChange, id }) {
     onChange(next);
   };
 
+  const summary = partyLabel(value);
+  // A mixed party shows as a count ("3 travellers") so it fits the field; the full summary is the
+  // button's accessible name and tooltip, and the panel lists each kind. Anything still too long is
+  // cut with an ellipsis rather than running into the next field.
+  const total = value.adults + value.children + value.infants;
+  const short = value.children || value.infants ? `${total} travellers` : summary;
   return (
     <div className="party-picker" ref={wrapRef}>
-      <button type="button" id={id} className="party-toggle" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((o) => !o)}>
-        {partyLabel(value)}
+      <button type="button" id={id} className="party-toggle" title={summary} aria-label={summary} aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((o) => !o)}>
+        <span className="party-toggle-text">{short}</span>
       </button>
       {open && (
         <div className="party-panel" id={panelId} role="group" aria-label="Travellers">

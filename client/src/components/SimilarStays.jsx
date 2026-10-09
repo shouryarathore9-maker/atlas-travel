@@ -2,6 +2,7 @@ import StayCard from './StayCard.jsx';
 import { hotelsApi } from '../api/resources.js';
 import { useAsync } from '../hooks/useAsync.js';
 import { formatDateString, pluralize } from '../lib/format.js';
+import Reveal from './Reveal.jsx';
 
 const MAX = 4;
 
@@ -29,7 +30,7 @@ export default function SimilarStays({ hotel, stay, nights }) {
   const guests = Number(stay.adults) + Number(stay.children);
 
   return (
-    <section className="similar-stays" aria-labelledby="similar-heading">
+    <Reveal as="section" className="similar-stays" aria-labelledby="similar-heading">
       <h2 id="similar-heading">Similar stays in {hotel.city}</h2>
       <p className="muted">
         Prices for {pluralize(nights, 'night')}, {formatDateString(stay.checkIn, { year: undefined })} –{' '}
@@ -43,6 +44,6 @@ export default function SimilarStays({ hotel, stay, nights }) {
           </li>
         ))}
       </ul>
-    </section>
+    </Reveal>
   );
 }

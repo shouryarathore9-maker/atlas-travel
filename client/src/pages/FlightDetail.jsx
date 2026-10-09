@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import FlightRouteMap from '../components/FlightRouteMap.jsx';
+import CountUp from '../components/CountUp.jsx';
 import Icon from '../components/Icon.jsx';
 import PriceSummary from '../components/PriceSummary.jsx';
 import { RatingBadge } from '../components/Rating.jsx';
+import Reveal from '../components/Reveal.jsx';
 import Reviews from '../components/Reviews.jsx';
 import SeatMap from '../components/SeatMap.jsx';
 import { Banner, ErrorState, SkeletonList } from '../components/States.jsx';
@@ -163,7 +165,9 @@ function FlightBooking({ data, party, cabin }) {
                 <label key={f.name} className={`fare-card ${fareType === f.name ? 'is-selected' : ''} ${!f.available ? 'is-disabled' : ''}`}>
                   <input type="radio" name="fare" className="sr-only" value={f.name} checked={fareType === f.name} disabled={!f.available} onChange={() => setFareType(f.name)} />
                   <span className="fare-name">{f.name}</span>
-                  <span className="price">{formatPrice(f.price)}</span>
+                  <span className="price">
+                    <CountUp value={f.price} format={formatPrice} />
+                  </span>
                   <span className="small muted">per traveller</span>
                   <ul className="fare-facts small">
                     <li>
@@ -179,7 +183,7 @@ function FlightBooking({ data, party, cabin }) {
           </section>
 
           {seatMap && (
-            <section className="detail-section" aria-labelledby="seats-heading">
+            <Reveal as="section" className="detail-section" aria-labelledby="seats-heading">
               <h2 id="seats-heading">Pick your seats</h2>
               <p className="muted small">
                 Optional — skip it and seats are assigned at web check-in.{party.infants > 0 && ' Infants sit on an adult’s lap and don’t need a seat.'}
@@ -200,11 +204,11 @@ function FlightBooking({ data, party, cabin }) {
                   .filter(Boolean)
                   .join(' · ') || 'No seats selected yet.'}
               </p>
-            </section>
+            </Reveal>
           )}
 
           {meals.length > 0 && (
-            <section className="detail-section" aria-labelledby="meals-heading">
+            <Reveal as="section" className="detail-section" aria-labelledby="meals-heading">
               <h2 id="meals-heading">Add a meal</h2>
               <p className="muted small">Optional. {cabin === 'business' ? 'Business meals are included in your fare.' : 'Pre-booked meals are served first.'}</p>
               <div className="form-grid cols-2">
@@ -222,11 +226,11 @@ function FlightBooking({ data, party, cabin }) {
                   </div>
                 ))}
               </div>
-            </section>
+            </Reveal>
           )}
 
           {tier && (
-            <section className="detail-section" aria-labelledby="policy-heading">
+            <Reveal as="section" className="detail-section" aria-labelledby="policy-heading">
               <h2 id="policy-heading">Baggage &amp; cancellation</h2>
               <dl className="facts">
                 <div>
@@ -249,10 +253,12 @@ function FlightBooking({ data, party, cabin }) {
               <p className="supplier-promise small">
                 <strong>If the airline cancels or reschedules.</strong> {SUPPLIER_PROMISE}
               </p>
-            </section>
+            </Reveal>
           )}
 
-          <Reviews itemType="flight" itemId={flight._id} rating={flight.rating} initialReviews={data.reviews} />
+          <Reveal>
+            <Reviews itemType="flight" itemId={flight._id} rating={flight.rating} initialReviews={data.reviews} />
+          </Reveal>
         </div>
 
         <PriceSummary

@@ -157,7 +157,7 @@ export default function Departures() {
           onClose={() => setConfirming(null)}
           footer={
             <div className="row">
-              <button type="button" className="btn btn-primary" onClick={toggleSales} disabled={action.busy}>
+              <button type="button" className="btn btn-primary" onClick={toggleSales} disabled={action.busy} aria-busy={action.busy || undefined}>
                 {action.busy ? 'Saving…' : confirming.salesStopped ? 'Resume sales' : 'Stop sales'}
               </button>
               <button type="button" className="btn btn-secondary" onClick={() => setConfirming(null)}>

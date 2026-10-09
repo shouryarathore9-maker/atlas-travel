@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import CountUp from '../components/CountUp.jsx';
 import Field from '../components/Field.jsx';
 import Icon from '../components/Icon.jsx';
 import MockPayment from '../components/MockPayment.jsx';
@@ -74,6 +75,7 @@ export default function Checkout() {
   const [codeOpen, setCodeOpen] = useState(Boolean(draft?.offerCode));
   const [codeInput, setCodeInput] = useState(draft?.offerCode || '');
   const [priceChange, setPriceChange] = useState(null);
+  const [applying, setApplying] = useState(false);
   const paying = useRef(false); // ignores a second click before React re-renders
 
   useEffect(() => {
@@ -115,6 +117,7 @@ export default function Checkout() {
 
   const errors = validateDetails(details);
   const shown = (key) => (touched[key] ? errors[key] : undefined);
+  const valid = (key) => Boolean(touched[key] && !errors[key]);
   const touch = (key) => () => setTouched((t) => ({ ...t, [key]: true }));
   const setPerson = (i, key) => (e) => setDetails((d) => ({ ...d, people: d.people.map((p, j) => (j === i ? { ...p, [key]: e.target.value } : p)) }));
   const setField = (key) => (e) => setDetails((d) => ({ ...d, [key]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
@@ -142,7 +145,10 @@ export default function Checkout() {
   async function applyCode(e) {
     e.preventDefault();
     const code = codeInput.trim().toUpperCase();
+    if (applying) return;
+    setApplying(true);
     const q = await loadQuote(code);
+    setApplying(false);
     if (q && !q.codeError) {
       setOfferCode(code);
       updateDraft({ offerCode: code });
@@ -243,6 +249,7 @@ export default function Checkout() {
                             onChange={setPerson(i, 'firstName')}
                             onBlur={touch(`people.${i}.firstName`)}
                             error={shown(`people.${i}.firstName`)}
+                            valid={valid(`people.${i}.firstName`)}
                           />
                           <Field
                             label="Last name"
@@ -252,6 +259,7 @@ export default function Checkout() {
                             onChange={setPerson(i, 'lastName')}
                             onBlur={touch(`people.${i}.lastName`)}
                             error={shown(`people.${i}.lastName`)}
+                            valid={valid(`people.${i}.lastName`)}
                           />
                         </div>
                       </fieldset>
@@ -267,7 +275,7 @@ export default function Checkout() {
                 <h2 className="h3">Contact details</h2>
                 <p className="small muted">We’ll send the confirmation here.</p>
                 <div className="form-grid cols-2">
-                  <Field label="Email" type="email" autoComplete="email" value={details.email} onChange={setField('email')} onBlur={touch('email')} error={shown('email')} />
+                  <Field label="Email" type="email" autoComplete="email" value={details.email} onChange={setField('email')} onBlur={touch('email')} error={shown('email')} valid={valid('email')} />
                   <Field
                     label="Mobile number"
                     type="tel"
@@ -277,6 +285,7 @@ export default function Checkout() {
                     onChange={setField('phone')}
                     onBlur={touch('phone')}
                     error={shown('phone')}
+                    valid={valid('phone')}
                     hint="10 digits, without +91"
                   />
                 </div>
@@ -415,7 +424,7 @@ export default function Checkout() {
                         aria-invalid={quote.codeError ? 'true' : undefined}
                         aria-describedby={quote.codeError ? 'offer-code-error' : undefined}
                       />
-                      <button type="submit" className="btn btn-secondary btn-sm" disabled={!codeInput.trim() || status.state === 'processing'}>
+                      <button type="submit" className="btn btn-secondary btn-sm" disabled={!codeInput.trim() || applying || status.state === 'processing'} aria-busy={applying || undefined}>
                         Apply
                       </button>
                     </form>
@@ -486,7 +495,9 @@ export default function Checkout() {
                 </div>
                 <div className="price-line price-total">
                   <dt>Total</dt>
-                  <dd>{formatPrice(f.total)}</dd>
+                  <dd>
+                    <CountUp value={f.total} format={formatPrice} />
+                  </dd>
                 </div>
               </dl>
             ) : (

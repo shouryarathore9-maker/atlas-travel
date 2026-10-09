@@ -4,6 +4,7 @@ import BestHotels from '../components/BestHotels.jsx';
 import OffersToday from '../components/OffersToday.jsx';
 import Icon from '../components/Icon.jsx';
 import Nav from '../components/Nav.jsx';
+import Reveal from '../components/Reveal.jsx';
 import SearchCard from '../components/SearchCard.jsx';
 import SmartImage from '../components/SmartImage.jsx';
 import { Banner } from '../components/States.jsx';
@@ -83,7 +84,7 @@ export default function Home() {
         <div className="container">
           <OffersToday />
 
-          <section className="section" id="destinations" aria-labelledby="featured-heading">
+          <Reveal as="section" className="section" id="destinations" aria-labelledby="featured-heading">
             <div className="spread section-head">
               <h2 id="featured-heading">Featured destinations</h2>
               <button type="button" className="btn-text view-all" onClick={() => setShowAll((s) => !s)} aria-expanded={showAll}>
@@ -110,11 +111,11 @@ export default function Home() {
                 </li>
               ))}
             </ul>
-          </section>
+          </Reveal>
 
           <BestHotels stayQuery={new URLSearchParams(defaultStay).toString()} />
 
-          <section className="quote-strip" aria-label="Our promise">
+          <Reveal as="section" className="quote-strip" aria-label="Our promise">
             <SmartImage src="/images/seed/quote-terrace.webp" alt="" className="quote-strip-image" />
             <figure className="quote-strip-card">
               <blockquote>
@@ -122,9 +123,9 @@ export default function Home() {
               </blockquote>
               <span className="quote-rule" aria-hidden="true" />
             </figure>
-          </section>
+          </Reveal>
 
-          <ul className="promise-row">
+          <Reveal as="ul" className="promise-row">
             {PROMISES.map((p) => (
               <li key={p.title}>
                 <Icon name={p.icon} size={22} />
@@ -134,7 +135,7 @@ export default function Home() {
                 </span>
               </li>
             ))}
-          </ul>
+          </Reveal>
         </div>
       </main>
     </div>

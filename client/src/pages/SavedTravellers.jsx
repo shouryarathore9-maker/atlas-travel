@@ -71,7 +71,7 @@ export default function SavedTravellers() {
       </div>
       {state.error && <p className="field-error">{state.error}</p>}
       <div className="row">
-        <button type="submit" className="btn btn-primary btn-sm" disabled={state.busy}>
+        <button type="submit" className="btn btn-primary btn-sm" disabled={state.busy} aria-busy={state.busy || undefined}>
           {state.busy ? 'Saving…' : 'Save'}
         </button>
         <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditing(null)}>

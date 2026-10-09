@@ -94,6 +94,7 @@ export default function Documents() {
                   className="btn btn-primary"
                   onClick={doCheckIn}
                   disabled={checkIn.busy}
+                  aria-busy={checkIn.busy || undefined}
                 >
                   {checkIn.busy ? "Checking in…" : "Check in"}
                 </button>

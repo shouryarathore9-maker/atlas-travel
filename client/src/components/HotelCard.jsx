@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
+import CountUp from './CountUp.jsx';
 import SmartImage from './SmartImage.jsx';
+import { useReveal } from '../hooks/useReveal.js';
 import { RatingBadge, Stars } from './Rating.jsx';
 import { formatPrice, pluralize } from '../lib/format.js';
 
@@ -8,8 +10,9 @@ import { formatPrice, pluralize } from '../lib/format.js';
 // keyboard and screen-reader users get exactly one link (the button), so no duplicate tab stops.
 export default function HotelCard({ hotel, stayQuery }) {
   const href = `/hotels/${hotel._id}?${stayQuery}`;
+  const revealRef = useReveal();
   return (
-    <article className="result-card hotel-card clickable-card fade-in">
+    <article ref={revealRef} className="result-card hotel-card clickable-card fade-in">
       <Link to={href} className="card-overlay-link" tabIndex={-1} aria-hidden="true" />
       <SmartImage
         src={hotel.photo}
@@ -32,7 +35,9 @@ export default function HotelCard({ hotel, stayQuery }) {
         </div>
       </div>
       <div className="result-price">
-        <p className="price">{formatPrice(hotel.price)}</p>
+        <p className="price">
+          <CountUp value={hotel.price} format={formatPrice} />
+        </p>
         <p className="small muted">avg per night, before taxes</p>
         <p className="small muted">{pluralize(hotel.nights, 'night')}</p>
         <Link to={href} className="btn btn-secondary btn-sm card-cta" aria-label={`See rooms at ${hotel.name}`}>

@@ -130,7 +130,7 @@ export default function Policies() {
         ))}
       </section>
       <div>
-        <button type="button" className="btn btn-primary" onClick={submit} disabled={save.busy}>
+        <button type="button" className="btn btn-primary" onClick={submit} disabled={save.busy} aria-busy={save.busy || undefined}>
           {save.busy ? 'Saving…' : 'Save policies'}
         </button>
       </div>

@@ -1,9 +1,16 @@
 import Icon from './Icon.jsx';
 
+// Branded loader: a flight path being drawn between two airports, with the status text under it.
+// Same API as before ({ label }); under reduced motion the route simply shows complete.
 export function Spinner({ label = 'Loading…' }) {
   return (
     <div className="spinner-block" role="status" aria-live="polite">
-      <div className="spinner" aria-hidden="true" />
+      <svg className="route-loader" viewBox="0 0 96 40" width="96" height="40" aria-hidden="true" focusable="false">
+        <path className="route-loader-track" d="M8 32 Q48 -6 88 32" />
+        <path className="route-loader-line" d="M8 32 Q48 -6 88 32" pathLength="100" />
+        <circle className="route-loader-stop" cx="8" cy="32" r="3.5" />
+        <circle className="route-loader-stop route-loader-stop--end" cx="88" cy="32" r="3.5" />
+      </svg>
       <p className="muted">{label}</p>
     </div>
   );

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from './Icon.jsx';
+import { startProgressNow } from '../lib/progress.js';
 import PartyPicker from './PartyPicker.jsx';
 import { CITIES } from '../lib/cities.js';
 import { addDays, isDateString, lastBookableDate, todayIst } from '../lib/dates.js';
@@ -33,6 +34,7 @@ export default function FlightSearchForm({ initial = {}, compact = false }) {
   function submit(e) {
     e.preventDefault();
     if (invalid) return;
+    startProgressNow(); // the results page shows skeletons; the top bar starts at once
     navigate(`/flights?${new URLSearchParams(values)}`);
   }
 

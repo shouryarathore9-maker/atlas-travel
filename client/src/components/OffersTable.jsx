@@ -164,7 +164,7 @@ export default function OffersTable({ api, base, admin = false }) {
           onClose={() => setConfirm(null)}
           footer={
             <div className="row">
-              <button type="button" className="btn btn-primary" onClick={toggle} disabled={state.busy}>
+              <button type="button" className="btn btn-primary" onClick={toggle} disabled={state.busy} aria-busy={state.busy || undefined}>
                 {state.busy ? 'Saving…' : confirm.status === 'paused' ? 'Resume' : 'Pause'}
               </button>
               <button type="button" className="btn btn-secondary" onClick={() => setConfirm(null)}>

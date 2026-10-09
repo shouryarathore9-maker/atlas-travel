@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import Icon from './Icon.jsx';
 import OfferCard from './OfferCard.jsx';
+import Reveal from './Reveal.jsx';
 import { offersApi } from '../api/resources.js';
 import { useAsync } from '../hooks/useAsync.js';
 
@@ -12,7 +13,7 @@ export default function OffersToday() {
   if (!data && !error) return <div className="section offers-section offers-placeholder" aria-hidden="true" />;
   if (!data?.offers?.length) return null;
   return (
-    <section className="section offers-section" id="offers" aria-labelledby="offers-heading">
+    <Reveal as="section" className="section offers-section" id="offers" aria-labelledby="offers-heading">
       <div className="spread section-head">
         <div>
           <h2 id="offers-heading">Offers available today</h2>
@@ -29,6 +30,6 @@ export default function OffersToday() {
           </li>
         ))}
       </ul>
-    </section>
+    </Reveal>
   );
 }
