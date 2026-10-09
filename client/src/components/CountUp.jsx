@@ -5,9 +5,10 @@ const roundTo = (n, decimals) => {
   const f = 10 ** decimals;
   return Math.round(n * f) / f;
 };
-const easeOut = (t) => 1 - (1 - t) ** 3;
+// Ease-in-out sine: the number starts gently, climbs readably and settles softly.
+const easeOut = (t) => -(Math.cos(Math.PI * t) - 1) / 2;
 
-// A number that counts up from zero (ease-out, ~1.2 s, after a short pause so the eye lands on it) the
+// A number that counts up from zero (gentle ease-in-out, ~1.8 s, after a short pause so the eye lands on it) the
 // first time it is on screen, and glides from the
 // old to the new value when it changes later. Re-renders with the same value do nothing.
 // - `format` is the same formatter the page used before (e.g. formatPrice), so the text is identical.
@@ -15,7 +16,7 @@ const easeOut = (t) => 1 - (1 - t) ** 3;
 //   aria-hidden and drawn over the (invisible) final value, so the width never jumps.
 // - No IntersectionObserver (or no JS) → the final value, plain. The device's reduce-motion setting is
 //   deliberately not consulted (owner's choice, prd.md → Decisions #36).
-export default function CountUp({ value, format = String, decimals = 0, duration = 1200, delay = 200, className = '' }) {
+export default function CountUp({ value, format = String, decimals = 0, duration = 1800, delay = 250, className = '' }) {
   const ref = useRef(null);
   const onScreen = useRef(null); // the number currently drawn (null until it has counted once)
   const [counting, setCounting] = useState(null); // in-between number while animating; null = final value

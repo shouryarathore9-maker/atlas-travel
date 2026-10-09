@@ -6,7 +6,7 @@ import { canAnimate, observeOnce } from '../lib/motion.js';
 let batchIndex = 0;
 let batchTimer = 0;
 function nextDelay() {
-  const delay = Math.min(batchIndex, 6) * 90;
+  const delay = Math.min(batchIndex, 6) * 120;
   batchIndex += 1;
   window.clearTimeout(batchTimer);
   batchTimer = window.setTimeout(() => {
@@ -38,7 +38,7 @@ export function useReveal() {
         timer = window.setTimeout(() => {
           el.classList.remove('reveal', 'is-revealed');
           el.style.removeProperty('--reveal-delay');
-        }, 1400);
+        }, 1900);
       },
       '0px 0px -40px 0px',
     );
