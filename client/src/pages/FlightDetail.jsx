@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import FlightRouteMap from '../components/FlightRouteMap.jsx';
-import CountUp from '../components/CountUp.jsx';
 import Icon from '../components/Icon.jsx';
 import PriceSummary from '../components/PriceSummary.jsx';
 import { RatingBadge } from '../components/Rating.jsx';
@@ -166,7 +165,7 @@ function FlightBooking({ data, party, cabin }) {
                   <input type="radio" name="fare" className="sr-only" value={f.name} checked={fareType === f.name} disabled={!f.available} onChange={() => setFareType(f.name)} />
                   <span className="fare-name">{f.name}</span>
                   <span className="price">
-                    <CountUp value={f.price} format={formatPrice} />
+                    {formatPrice(f.price)}
                   </span>
                   <span className="small muted">per traveller</span>
                   <ul className="fare-facts small">

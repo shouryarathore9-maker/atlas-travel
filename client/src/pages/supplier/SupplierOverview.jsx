@@ -1,14 +1,18 @@
 import { useOutletContext } from 'react-router-dom';
+import CountUp from '../../components/CountUp.jsx';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle.js';
 import { changeLabel } from '../../lib/consoleForm.js';
 import { formatDateTime, formatPrice, formatDate } from '../../lib/format.js';
 
-function Kpi({ label, value, current, previous }) {
+// A headline number: counts up with the others when the page loads.
+function Kpi({ label, format = String, current, previous }) {
   const up = current >= previous;
   return (
     <div className="kpi">
       <p className="kpi-label">{label}</p>
-      <p className="kpi-value">{value}</p>
+      <p className="kpi-value">
+        <CountUp value={current} format={format} />
+      </p>
       <p className={`kpi-change ${previous ? (up ? 'is-up' : 'is-down') : ''}`}>{changeLabel(current, previous)}</p>
     </div>
   );
@@ -25,8 +29,8 @@ export default function SupplierOverview() {
       <h1 className="console-h1">Overview</h1>
       <p className="muted">Bookings made in the last 30 days, compared with the 30 days before.</p>
       <div className="kpi-strip">
-        <Kpi label="Bookings" value={kpis.bookings.current} current={kpis.bookings.current} previous={kpis.bookings.previous} />
-        <Kpi label="Gross booking value" value={formatPrice(kpis.revenue.current)} current={kpis.revenue.current} previous={kpis.revenue.previous} />
+        <Kpi label="Bookings" current={kpis.bookings.current} previous={kpis.bookings.previous} />
+        <Kpi label="Gross booking value" format={formatPrice} current={kpis.revenue.current} previous={kpis.revenue.previous} />
       </div>
 
       <section className="console-section">

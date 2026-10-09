@@ -1,4 +1,5 @@
 import { formatDate, formatPrice } from '../lib/format.js';
+import CountUp from './CountUp.jsx';
 
 const KIND = {
   completed: 'Completed',
@@ -28,25 +29,33 @@ export default function StatementView({ statement, queries = [], admin = false, 
       <div className="kpi-strip statement-totals">
         <div className="kpi">
           <p className="kpi-label">Gross before discount</p>
-          <p className="kpi-value">{formatPrice(t.gross)}</p>
+          <p className="kpi-value">
+            <CountUp value={t.gross} format={formatPrice} />
+          </p>
           <p className="kpi-change">{t.lines} lines</p>
         </div>
         <div className="kpi">
           <p className="kpi-label">Discounts</p>
-          <p className="kpi-value">{formatPrice(t.discountPlatform + t.discountSupplier)}</p>
+          <p className="kpi-value">
+            <CountUp value={t.discountPlatform + t.discountSupplier} format={formatPrice} />
+          </p>
           <p className="kpi-change">
             Atlas-funded {formatPrice(t.discountPlatform)} · {admin ? 'supplier' : 'you'} {formatPrice(t.discountSupplier)}
           </p>
         </div>
         <div className="kpi">
           <p className="kpi-label">Commission ({pct(statement.commissionRate)})</p>
-          <p className="kpi-value">{formatPrice(t.commission)}</p>
+          <p className="kpi-value">
+            <CountUp value={t.commission} format={formatPrice} />
+          </p>
           <p className="kpi-change">Refunds {formatPrice(t.refunds)}</p>
         </div>
         {Boolean(t.adjustments || t.balance) && (
           <div className="kpi">
             <p className="kpi-label">Adjustments</p>
-            <p className="kpi-value">{signed((t.adjustments || 0) + (t.balance || 0))}</p>
+            <p className="kpi-value">
+              <CountUp value={(t.adjustments || 0) + (t.balance || 0)} format={signed} />
+            </p>
             <p className="kpi-change">
               {[t.adjustments ? `Corrections ${signed(t.adjustments)}` : null, t.balance ? `Carried from last month ${signed(t.balance)}` : null].filter(Boolean).join(' · ')}
             </p>
@@ -54,7 +63,9 @@ export default function StatementView({ statement, queries = [], admin = false, 
         )}
         <div className="kpi">
           <p className="kpi-label">{admin ? 'Net owed to supplier' : 'Net owed to you'}</p>
-          <p className="kpi-value">{signed(t.net)}</p>
+          <p className="kpi-value">
+            <CountUp value={t.net} format={signed} />
+          </p>
           <p className="kpi-change">{admin ? `Atlas keeps ${signed(t.atlasTake)}` : <StatementStatus statement={statement} />}</p>
         </div>
       </div>

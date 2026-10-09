@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import { canAnimate, observeOnce } from '../lib/motion.js';
+import { canCount } from '../lib/motion.js';
 
 const roundTo = (n, decimals) => {
   const f = 10 ** decimals;
@@ -8,13 +8,15 @@ const roundTo = (n, decimals) => {
 // Ease-in-out sine: the number starts gently, climbs readably and settles softly.
 const easeOut = (t) => -(Math.cos(Math.PI * t) - 1) / 2;
 
-// A number that counts up from zero (gentle ease-in-out, ~1.8 s, after a short pause so the eye lands on it) the
-// first time it is on screen, and glides from the
-// old to the new value when it changes later. Re-renders with the same value do nothing.
+// A headline number on the supplier and admin dashboards (KPI cards, statement totals) that counts up
+// from zero (gentle ease-in-out, ~1.8 s, after a short pause) as soon as it appears — not when it is
+// scrolled to — so every number on a page climbs together. It glides from the old to the new value
+// when it changes (e.g. a new date range). Re-renders with the same value do nothing. Traveller pages
+// show plain, static numbers (owner's choice).
 // - `format` is the same formatter the page used before (e.g. formatPrice), so the text is identical.
 // - The final value is always in the DOM and readable by screen readers; the moving number is
 //   aria-hidden and drawn over the (invisible) final value, so the width never jumps.
-// - No IntersectionObserver (or no JS) → the final value, plain. The device's reduce-motion setting is
+// - No requestAnimationFrame (or no JS) → the final value, plain. The device's reduce-motion setting is
 //   deliberately not consulted (owner's choice, prd.md → Decisions #36).
 export default function CountUp({ value, format = String, decimals = 0, duration = 1800, delay = 250, className = '' }) {
   const ref = useRef(null);
@@ -24,7 +26,7 @@ export default function CountUp({ value, format = String, decimals = 0, duration
 
   useLayoutEffect(() => {
     const el = ref.current;
-    if (!finite || !el || !canAnimate() || (onScreen.current === null && value === 0)) {
+    if (!finite || !el || !canCount() || (onScreen.current === null && value === 0)) {
       onScreen.current = finite ? value : null;
       setCounting(null);
       return undefined;
@@ -49,16 +51,11 @@ export default function CountUp({ value, format = String, decimals = 0, duration
     };
 
     if (onScreen.current === null) {
-      // First appearance: hold at zero (before paint) and count once it is on screen.
+      // First appearance: hold at zero (before paint) and start after the short pause — all numbers
+      // that appear with the page start together.
       setCounting(0);
-      let wait = 0;
-      const cancel = observeOnce(el, () => {
-        wait = window.setTimeout(() => run(0), delay);
-      });
-      stop = () => {
-        cancel();
-        window.clearTimeout(wait);
-      };
+      const wait = window.setTimeout(() => run(0), delay);
+      stop = () => window.clearTimeout(wait);
     } else if (onScreen.current !== value) {
       run(onScreen.current);
     }

@@ -49,21 +49,35 @@ describe('CountUp', () => {
     expect(container.querySelector('.count-up-final')).toHaveTextContent('₹12,345');
   });
 
-  it('keeps the final value readable while counting, then settles on it', () => {
+  it('keeps the final value readable while counting, then settles on it — without waiting for a scroll', () => {
     reducedMotion(false);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const { container } = render(<CountUp value={12345} format={formatPrice} />);
-    // Waiting to scroll into view: the moving number is hidden from screen readers; the final one is not.
+    // The moving number is hidden from screen readers; the final one is not.
     expect(container.querySelector('.count-up-live')).toHaveAttribute('aria-hidden', 'true');
     expect(container.querySelector('.count-up-live')).toHaveTextContent('₹0');
     expect(container.querySelector('.count-up-final')).toHaveTextContent('₹12,345');
 
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    showAll();
-    act(() => vi.advanceTimersByTime(250)); // the short pause before counting
+    act(() => vi.advanceTimersByTime(250)); // the short pause before counting; no IntersectionObserver involved
     vi.useRealTimers();
+    expect(frames).toHaveLength(1);
     act(() => frames.shift()(performance.now() + 10_000)); // jump past the end of the animation
     expect(container.querySelector('.is-counting')).toBeNull();
     expect(screen.getByText('₹12,345')).toBeInTheDocument();
+  });
+
+  it('every number on a page starts counting at the same moment', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    render(
+      <>
+        <CountUp value={100} />
+        <CountUp value={5000} />
+      </>,
+    );
+    expect(frames).toHaveLength(0);
+    act(() => vi.advanceTimersByTime(250));
+    vi.useRealTimers();
+    expect(frames).toHaveLength(2);
   });
 
   it('formats ratings with one decimal like before', () => {

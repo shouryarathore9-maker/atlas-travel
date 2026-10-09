@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import CountUp from '../../components/CountUp.jsx';
 import { BarList, ColumnChart, Funnel, LineChart } from '../../components/Charts.jsx';
 import Field from '../../components/Field.jsx';
 import Modal from '../../components/Modal.jsx';
@@ -46,12 +47,15 @@ function change(current, previous, { points = false } = {}) {
   return { text: `${diff >= 0 ? '▲' : '▼'} ${Math.abs(diff * 100).toFixed(1)}%`, up: diff >= 0 };
 }
 
-function Kpi({ label, value, current, previous, days, points }) {
+// A headline number: counts up with the others when the page (or a new range) loads.
+function Kpi({ label, format, decimals = 0, current, previous, days, points }) {
   const c = change(current, previous, { points });
   return (
     <div className="kpi">
       <p className="kpi-label">{label}</p>
-      <p className="kpi-value">{value}</p>
+      <p className="kpi-value">
+        <CountUp value={current} format={format} decimals={decimals} />
+      </p>
       <p className={`kpi-change ${c.neutral ? '' : c.up ? 'is-up' : 'is-down'}`}>
         {c.text} <span className="muted">vs previous {days} days</span>
       </p>
@@ -167,11 +171,11 @@ export default function AdminAnalytics() {
           {data && (
             <>
               <div className="kpi-strip kpi-strip-5">
-                <Kpi label="Bookings" value={k.current.bookings.toLocaleString('en-IN')} current={k.current.bookings} previous={k.previous.bookings} days={days} />
-                <Kpi label="Gross booking value" value={compactInr(k.current.gbv)} current={k.current.gbv} previous={k.previous.gbv} days={days} />
-                <Kpi label="Net revenue" value={compactInr(k.current.netRevenue)} current={k.current.netRevenue} previous={k.previous.netRevenue} days={days} />
-                <Kpi label="Take rate" value={pct(k.current.takeRate)} current={k.current.takeRate} previous={k.previous.takeRate} days={days} points />
-                <Kpi label="Avg booking value" value={formatPrice(k.current.avgBookingValue)} current={k.current.avgBookingValue} previous={k.previous.avgBookingValue} days={days} />
+                <Kpi label="Bookings" format={(n) => n.toLocaleString('en-IN')} current={k.current.bookings} previous={k.previous.bookings} days={days} />
+                <Kpi label="Gross booking value" format={compactInr} current={k.current.gbv} previous={k.previous.gbv} days={days} />
+                <Kpi label="Net revenue" format={compactInr} current={k.current.netRevenue} previous={k.previous.netRevenue} days={days} />
+                <Kpi label="Take rate" format={pct} decimals={4} current={k.current.takeRate} previous={k.previous.takeRate} days={days} points />
+                <Kpi label="Avg booking value" format={formatPrice} current={k.current.avgBookingValue} previous={k.previous.avgBookingValue} days={days} />
               </div>
 
               {tab === 'overview' && (

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import CountUp from '../components/CountUp.jsx';
 import Reveal from '../components/Reveal.jsx';
 import Icon from '../components/Icon.jsx';
 import Lightbox from '../components/Lightbox.jsx';
@@ -250,7 +249,7 @@ function HotelBooking({ data, stay }) {
                             </div>
                             <div className="rate-plan-price">
                               <p className="price">
-                                <CountUp value={p.avgNightly} format={formatPrice} />
+                                {formatPrice(p.avgNightly)}
                               </p>
                               <p className="small muted">
                                 avg per night + {formatPrice(r.taxesAndFees)} taxes · {formatPrice(p.perRoom)} per room for the stay

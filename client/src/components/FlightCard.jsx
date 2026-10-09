@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import CountUp from './CountUp.jsx';
 import { RatingBadge } from './Rating.jsx';
 import { useReveal } from '../hooks/useReveal.js';
 import { formatDuration, formatPrice, formatTime, stopsLabel } from '../lib/format.js';
@@ -44,7 +43,7 @@ export default function FlightCard({ flight, party, cabin }) {
 
       <div className="result-price">
         <p className="price">
-          <CountUp value={flight.price} format={formatPrice} />
+          {formatPrice(flight.price)}
         </p>
         <p className="small muted">per traveller</p>
         <Link

@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import CountUp from './CountUp.jsx';
 import SmartImage from './SmartImage.jsx';
 import { useReveal } from '../hooks/useReveal.js';
 import { RatingBadge, Stars } from './Rating.jsx';
@@ -36,7 +35,7 @@ export default function HotelCard({ hotel, stayQuery }) {
       </div>
       <div className="result-price">
         <p className="price">
-          <CountUp value={hotel.price} format={formatPrice} />
+          {formatPrice(hotel.price)}
         </p>
         <p className="small muted">avg per night, before taxes</p>
         <p className="small muted">{pluralize(hotel.nights, 'night')}</p>

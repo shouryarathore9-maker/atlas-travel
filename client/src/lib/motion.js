@@ -4,6 +4,7 @@
 // The owner chose motion for everyone: the device's "reduce motion" setting is deliberately not
 // consulted (prd.md → Decisions #36).
 export const canAnimate = () => typeof window !== 'undefined' && typeof window.IntersectionObserver === 'function' && typeof window.requestAnimationFrame === 'function';
+export const canCount = () => typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function';
 
 // One observer per root margin for the whole page; each element's callback runs once, the first
 // time it is on screen. Reveals use a small negative bottom margin (they start just inside the

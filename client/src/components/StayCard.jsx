@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import CountUp from './CountUp.jsx';
 import SmartImage from './SmartImage.jsx';
 import { RatingBadge, Stars } from './Rating.jsx';
 import { formatPrice } from '../lib/format.js';
@@ -21,7 +20,7 @@ export default function StayCard({ hotel, href, price, priceLabel = 'per night' 
         {price != null && (
           <p className="stay-card-price">
             <span className="price">
-              <CountUp value={price} format={formatPrice} />
+              {formatPrice(price)}
             </span>
             <span className="small muted">{priceLabel}</span>
           </p>

@@ -1,4 +1,3 @@
-import CountUp from './CountUp.jsx';
 import { formatDate, formatDateTime, formatPrice } from '../lib/format.js';
 
 export function cancellationLabel(booking) {
@@ -102,7 +101,7 @@ export default function BookingSummary({ booking }) {
         <div className="price-line price-total">
           <dt>Paid</dt>
           <dd>
-            <CountUp value={f.total} format={formatPrice} />
+            {formatPrice(f.total)}
           </dd>
         </div>
         {booking.status === 'cancelled' && booking.cancellation?.refundAmount !== undefined && (

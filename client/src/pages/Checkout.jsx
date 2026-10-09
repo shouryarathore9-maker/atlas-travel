@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import CountUp from '../components/CountUp.jsx';
 import Field from '../components/Field.jsx';
 import Icon from '../components/Icon.jsx';
 import MockPayment from '../components/MockPayment.jsx';
@@ -496,7 +495,7 @@ export default function Checkout() {
                 <div className="price-line price-total">
                   <dt>Total</dt>
                   <dd>
-                    <CountUp value={f.total} format={formatPrice} />
+                    {formatPrice(f.total)}
                   </dd>
                 </div>
               </dl>
