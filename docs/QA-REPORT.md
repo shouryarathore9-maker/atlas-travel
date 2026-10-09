@@ -217,3 +217,5 @@ New: **Admin → Users** (owner's choice: read-only list) — tested at 390px an
 | Branded loader / progress bar | page loads | Flight-path loader with status text; top bar during requests |
 
 Console: no script errors; the only console lines are the browser's log of the deliberate 400/409 responses above.
+
+**Live (https://atlas-travel-two.vercel.app, after deploy):** production migrated with `npm run migrate:phase2b` (48 hotels, 128 room types, 48 rate cards, commission schedule; a second run changed nothing; 0 nights booked above a room type's total). API: commission defaults now 10% / 10%, from 1 November airlines 5% and hotels 15%; 52 suppliers with their rate; 228 statements; hotel search and details show per-night availability; analytics 30 days in 0.6 s. Home at 1280px: the travellers panel sits on top of the offer cards, a mixed party reads "N travellers", Cabin isn't clipped; no console errors.
